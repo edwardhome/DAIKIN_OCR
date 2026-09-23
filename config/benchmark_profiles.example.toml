@@ -1,0 +1,12 @@
+[[profiles]]
+id = "local-alternative"
+provider = "ollama"
+model = "REPLACE_WITH_AN_INSTALLED_VISION_MODEL"
+model_version = ""
+
+[[profiles]]
+id = "cloud-baseline"
+provider = "nvidia"
+model = "REPLACE_WITH_YOUR_NVIDIA_VISION_MODEL"
+model_version = ""
+output_mode = "prompt"

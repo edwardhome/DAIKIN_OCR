@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf }}"><meta name="theme-color" content="#174b57">
+  <title>大金空調銘牌辨識</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+  <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
+</head>
+<body>
+<header class="topbar"><a class="brand" href="/">銘牌辨識 <small>現場工作工具</small></a>
+  {% if auth_enabled %}<form action="/logout" method="post"><input type="hidden" name="csrf_token" value="{{ csrf }}"><button class="quiet" type="submit">登出</button></form>{% endif %}
+</header>
+<nav aria-label="主要導覽"><a href="/">拍攝辨識</a><a href="/history">辨識紀錄</a><a href="/dashboard">統計</a><a href="/datasets">資料集</a><a href="/benchmark">Benchmark</a></nav>
+<div id="notice" role="status" aria-live="polite" hidden></div>
+<main id="app"><p>正在載入…</p></main>
+<footer>人工確認後再分享 · 資料集預設為私人</footer>
+</body></html>
