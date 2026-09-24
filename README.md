@@ -4,6 +4,8 @@
 
 Python 3.12+、uv、Flask、SQLite、HTML/CSS/Vanilla JavaScript。預設 HTTP **50003**。無 React、無 LINE Messaging API、無自動微調。
 
+完整使用流程、狀態機、資料飛輪、模型評估及 M6 容量／價格參考，請見 [操作手冊](操作手冊.md)。
+
 ## 快速啟動
 
 在本專案目錄執行：
