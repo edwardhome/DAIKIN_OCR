@@ -144,13 +144,86 @@ small {
 }
 .split {
   display: grid;
-  grid-template-columns: minmax(260px, 0.85fr) minmax(360px, 1.15fr);
+  grid-template-columns: minmax(360px, 1.15fr) minmax(260px, 0.85fr);
   gap: 20px;
   align-items: start;
 }
 .photo-column {
   position: sticky;
   top: 15px;
+  margin-top: 0;
+}
+.photo-column summary {
+  font-weight: 650;
+}
+.photo-column[open] summary {
+  margin-bottom: 14px;
+}
+.review-fields {
+  min-width: 0;
+}
+.recognition-loading {
+  max-width: 760px;
+  margin: 20px auto;
+  padding: 40px 24px;
+  min-height: 330px;
+  text-align: center;
+}
+.loading-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid var(--line);
+  border-top-color: var(--brand);
+  border-radius: 50%;
+  margin: 0 auto 22px;
+  animation: recognition-spin 1s linear infinite;
+}
+@keyframes recognition-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .loading-spinner {
+    animation: none;
+  }
+}
+.loading-stage {
+  min-height: 3.2em;
+}
+.recognition-meta {
+  padding: 12px 16px;
+}
+.recognition-meta p {
+  margin-bottom: 0;
+}
+.confirmation-actions {
+  scroll-margin-top: 16px;
+}
+#share-panel {
+  border-color: #91afb5;
+  scroll-margin-top: 16px;
+}
+.share-fallback {
+  background: var(--bg);
+  border-radius: 7px;
+  padding: 12px 16px;
+  margin: 12px 0;
+}
+.share-fallback .actions {
+  margin: 8px 0 12px;
+}
+.clipboard-copy-buffer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  font-size: 16px;
+  pointer-events: none;
 }
 .photo {
   width: 100%;
@@ -395,6 +468,7 @@ hr {
   }
   .photo-column {
     position: static;
+    grid-row: 1;
   }
   .photo {
     max-height: 42vh;
@@ -411,6 +485,13 @@ hr {
   }
   .actions > * {
     flex: 1;
+  }
+  .share-actions > *,
+  .share-fallback .actions > * {
+    flex: 1 1 100%;
+  }
+  .confirmation-actions > button {
+    width: 100%;
   }
   .topbar {
     padding: 13px 18px;

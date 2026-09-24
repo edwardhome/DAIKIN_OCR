@@ -4,6 +4,30 @@ let config,
   dirty = false,
   reviewMs = 0,
   activeSince = performance.now();
+let jobView = 0;
+let stopRecognition = () => {};
+let disposeShare = () => {};
+const componentLoads = new Map();
+
+function loadComponent(name) {
+  if (!componentLoads.has(name)) {
+    componentLoads.set(
+      name,
+      new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = `/static/js/${name}.js`;
+        script.onload = resolve;
+        script.onerror = () => {
+          componentLoads.delete(name);
+          script.remove();
+          reject(new Error("頁面元件載入失敗，請重新整理後再試。"));
+        };
+        document.head.append(script);
+      }),
+    );
+  }
+  return componentLoads.get(name);
+}
 const labels = {
   QUEUED: "等待辨識",
   PREPROCESSING: "處理照片",
@@ -161,6 +185,8 @@ function profileSelect() {
 function trackDirty() {
   dirty = true;
   document.querySelector("#share-panel")?.setAttribute("hidden", "");
+  const hint = document.querySelector("#confirmation-hint");
+  if (hint) hint.textContent = "內容已修改，請再次確認並儲存後分享。";
 }
 function accrue() {
   if (!document.hidden) reviewMs += performance.now() - activeSince;
@@ -175,6 +201,14 @@ window.addEventListener("beforeunload", (e) => {
     e.preventDefault();
     e.returnValue = "";
   }
+});
+window.addEventListener("pagehide", () => {
+  jobView += 1;
+  stopRecognition();
+});
+window.addEventListener("pageshow", (e) => {
+  if (e.persisted && !dirty && location.pathname.startsWith("/jobs/"))
+    guarded(() => jobPage(location.pathname.split("/")[2]))();
 });
 
 function home() {
@@ -309,64 +343,256 @@ async function history(page = 1) {
   root.append(nav);
 }
 
-async function sharePanel(confirmation) {
-  const box = panel("已確認，可以分享");
+async function sharePanel(confirmation, job) {
+  await loadComponent("sharing");
+  const sharing = window.NameplateSharing;
+  const box = panel("分享已確認資料");
   box.id = "share-panel";
   const data = await api(`/api/confirmations/${confirmation.id}/share-text`);
+  const feedback = el("p", "正在準備原始相片…", "help");
+  feedback.setAttribute("role", "status");
+  const preview = el("details");
   const text = el("textarea");
-  text.rows = 11;
+  text.rows = 9;
   text.readOnly = true;
   text.value = data.text;
   text.setAttribute("aria-label", "LINE 分享文字");
-  box.append(text);
-  const copy = async () => {
-    try {
-      if (!navigator.clipboard?.writeText) throw new Error();
-      await navigator.clipboard.writeText(data.text);
-      notice("已複製文字，可貼到 LINE。");
-    } catch {
-      text.focus();
-      text.select();
-      text.setSelectionRange(0, text.value.length);
-      notice(
-        "已選取文字，請使用手機的「複製」或電腦 Ctrl/Cmd+C，再貼到 LINE。",
-      );
+  const recordUrl = new URL(`/jobs/${job.id}`, location.href).href;
+  const recordLink = el("textarea");
+  recordLink.rows = 2;
+  recordLink.readOnly = true;
+  recordLink.value = recordUrl;
+  recordLink.setAttribute("aria-label", "辨識紀錄連結");
+  add(
+    preview,
+    el("summary", "查看分享文字與紀錄連結"),
+    text,
+    labeled("辨識紀錄連結", recordLink),
+    el("p", "紀錄連結仍需通過這個系統的存取驗證。", "help"),
+  );
+
+  const copy = async (value, target, label) => {
+    const result = await sharing.copyText(value, target);
+    if (result.copied) {
+      feedback.textContent = `已複製${label}，可貼到 LINE。`;
+      notice(`已複製${label}。`);
+    } else {
+      preview.open = true;
+      target.focus();
+      target.select();
+      target.setSelectionRange(0, target.value.length);
+      feedback.textContent =
+        "瀏覽器未允許自動複製，已選取內容，請長按選擇「複製」。";
     }
   };
-  const share = async () => {
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: "大金空調設備資料", text: data.text });
-        notice("已開啟分享，請在 LINE 完成傳送。");
-      } catch (e) {
-        if (e.name === "AbortError") notice("已取消分享。");
-        else await copy();
-      }
-    } else await copy();
+
+  let original = null;
+  let disposed = false;
+  const originalRequest = new AbortController();
+  box.dispose = () => {
+    disposed = true;
+    originalRequest.abort();
+    sharing.releaseOriginal(original);
   };
+  const fallback = el("div", null, "share-fallback");
+  fallback.hidden = true;
+  const download = link(
+    "1. 儲存原始相片",
+    job.original_image_url,
+    "button secondary",
+  );
+  download.download = "";
+  const openOriginal = link("開啟原圖，長按儲存或分享", job.original_image_url);
+  openOriginal.target = "_blank";
+  openOriginal.rel = "noopener";
+  const line = link(
+    "2. 開啟 LINE 帶入文字",
+    sharing.lineTextUrl(data.text),
+    "button",
+  );
+  line.target = "_blank";
+  line.rel = "noopener noreferrer";
   add(
-    box,
-    add(
-      el("div", null, "actions"),
-      button("分享至 LINE", guarded(share)),
-      button("複製文字", guarded(copy), "secondary"),
-    ),
+    fallback,
     el(
       "p",
-      `分享內容來自人工確認第 ${confirmation.revision_no} 版。修改後需再次確認。`,
+      "此瀏覽器請分兩步分享：先儲存原圖，再開啟 LINE，附上相片與以下文字。",
+      "help",
+    ),
+    add(el("div", null, "actions"), download, line),
+    openOriginal,
+    el("p", "LINE 文字按鈕不會自動附上照片，請從相簿或檔案加入原圖。", "help"),
+  );
+
+  const share = button(
+    "準備原始相片…",
+    guarded(async () => {
+      if (!original) return;
+      share.disabled = true;
+      try {
+        // The file is already loaded; invoke the share sheet inside this click.
+        const result = await sharing.shareConfirmed({
+          file: original.file,
+          text: data.text,
+          title: "大金空調設備資料",
+        });
+        if (result.status === "shared") {
+          feedback.textContent =
+            "已交給手機分享功能，請在 LINE 確認相片與文字後傳送。若只帶入相片，可再複製文字貼上。";
+        } else if (result.status === "cancelled") {
+          feedback.textContent = "已取消分享，可以再次操作。";
+        } else {
+          fallback.hidden = false;
+          feedback.textContent =
+            "這次無法開啟原生圖文分享，請使用下方的原圖與 LINE 操作。";
+        }
+      } finally {
+        share.disabled = false;
+      }
+    }),
+  );
+  share.disabled = true;
+  const actions = add(
+    el("div", null, "actions share-actions"),
+    share,
+    button(
+      "複製文字",
+      guarded(() => copy(data.text, text, "文字")),
+      "secondary",
+    ),
+    button(
+      "複製紀錄連結",
+      guarded(() => copy(recordUrl, recordLink, "紀錄連結")),
+      "secondary",
+    ),
+  );
+  add(
+    box,
+    actions,
+    feedback,
+    fallback,
+    preview,
+    el(
+      "p",
+      `分享人工確認第 ${confirmation.revision_no} 版。內容修改後需再次確認。`,
       "help",
     ),
   );
+
+  sharing
+    .prepareOriginal({
+      url: job.original_image_url,
+      filename: `nameplate-${job.id}`,
+      signal: originalRequest.signal,
+    })
+    .then((prepared) => {
+      if (disposed) {
+        sharing.releaseOriginal(prepared);
+        return;
+      }
+      original = prepared;
+      download.href = original.url;
+      download.download = original.filename;
+      if (sharing.canShareFiles(original.file)) {
+        share.textContent = "分享原圖與文字";
+        share.disabled = false;
+        feedback.textContent = "原始相片已備妥，按分享後選擇 LINE。";
+      } else {
+        share.hidden = true;
+        fallback.hidden = false;
+        feedback.textContent = "原始相片已備妥，可儲存後與確認文字一起傳送。";
+      }
+    })
+    .catch((error) => {
+      if (disposed || error.name === "AbortError") return;
+      share.hidden = true;
+      fallback.hidden = false;
+      feedback.textContent =
+        "原始相片暫時無法載入。可用下方連結重開原圖，或重新整理後再試；尚未送出照片。";
+    });
   return box;
 }
 
-async function jobPage(id, selectedId) {
-  const job = await api(`/api/jobs/${id}`);
+function recognitionLoading(job, attempt, view) {
+  const box = panel();
+  box.classList.add("recognition-loading");
+  box.id = "recognition-loading";
+  box.setAttribute("aria-busy", "true");
+  const spinner = el("div", null, "loading-spinner");
+  spinner.setAttribute("aria-hidden", "true");
+  const stage = el("p", "", "loading-stage");
+  stage.setAttribute("role", "status");
+  stage.setAttribute("aria-live", "polite");
+  const messages = {
+    QUEUED: "照片已保存，正在等待開始辨識。",
+    PREPROCESSING: "正在處理照片，準備讀取銘牌。",
+    RUNNING: "AI 正在讀取銘牌資料，請稍候。",
+  };
+  const update = (status) => {
+    const message = messages[status] || "正在取得辨識狀態…";
+    if (stage.textContent !== message) stage.textContent = message;
+  };
+  update(attempt.status);
+  add(
+    box,
+    spinner,
+    el("h2", "辨識中"),
+    stage,
+    el(
+      "p",
+      "照片已保存。完成後會自動顯示結果，也可以稍後從辨識紀錄開啟。",
+      "help",
+    ),
+    link("查看辨識紀錄", "/history", "button secondary"),
+  );
+  root.append(box);
+  loadComponent("polling")
+    .then(() => {
+      if (view !== jobView) return;
+      const current = (data) => {
+        const found = data.attempts.find((item) => item.id === attempt.id);
+        if (!found) throw new Error("暫時無法取得這次辨識，正在重新連線…");
+        return found;
+      };
+      stopRecognition = window.NameplatePolling.watch({
+        load: (signal) => api(`/api/jobs/${job.id}`, { signal }),
+        isPending: (data) =>
+          ["QUEUED", "PREPROCESSING", "RUNNING"].includes(current(data).status),
+        onProgress: (data) => update(current(data).status),
+        onComplete: guarded((data) => jobPage(job.id, attempt.id, data)),
+        onError: () => {
+          stage.textContent =
+            "連線暫時中斷，正在重新取得狀態。照片已保存，無需再次上傳。";
+        },
+      });
+    })
+    .catch((error) => {
+      if (view !== jobView) return;
+      stage.textContent = error.message;
+      box.setAttribute("aria-busy", "false");
+      box.append(
+        button(
+          "重新取得狀態",
+          guarded(() => jobPage(job.id, attempt.id)),
+          "secondary",
+        ),
+      );
+    });
+}
+
+async function jobPage(id, selectedId, receivedJob) {
+  const view = ++jobView;
+  stopRecognition();
+  disposeShare();
+  disposeShare = () => {};
+  const job = receivedJob || (await api(`/api/jobs/${id}`));
+  if (view !== jobView) return;
   root.replaceChildren(el("h1", "銘牌辨識結果"));
   const attempt =
     job.attempts.find((a) => a.id === selectedId) || job.attempts.at(-1);
   if (!attempt) return;
   const top = panel();
+  top.classList.add("recognition-meta");
   const stateBadge = el("span", labels[attempt.status], "badge");
   add(
     top,
@@ -392,10 +618,18 @@ async function jobPage(id, selectedId) {
     top.append(labeled("辨識版本", choices));
   }
   root.append(top);
+  if (["QUEUED", "PREPROCESSING", "RUNNING"].includes(attempt.status)) {
+    stateBadge.textContent = "辨識中";
+    recognitionLoading(job, attempt, view);
+    return;
+  }
   const split = el("div", null, "split"),
-    photo = panel("對照照片"),
+    photo = el("details", null, "panel photo-column"),
     form = el("div");
-  photo.classList.add("photo-column");
+  photo.open = window.matchMedia("(min-width: 721px)").matches;
+  photo.append(el("summary", "查看照片，對照辨識內容"));
+  form.className = "review-fields";
+  form.append(el("h2", "確認辨識內容"));
   const img = el("img", null, "photo");
   img.src = attempt.processed_image_url || job.original_image_url;
   img.alt = "上傳的銘牌照片";
@@ -432,19 +666,8 @@ async function jobPage(id, selectedId) {
     }),
   );
   photo.append(labeled("照片難度（人工標記）", difficulty));
-  add(split, photo, form);
+  add(split, form, photo);
   root.append(split);
-  if (["QUEUED", "PREPROCESSING", "RUNNING"].includes(attempt.status)) {
-    add(
-      form,
-      el("p", "照片已保存，可稍後從辨識紀錄開啟。", "panel"),
-      el("p", "若一直等待，請確認背景 Worker 已啟動。", "help"),
-    );
-    setTimeout(() => {
-      if (!dirty) guarded(() => jobPage(id, attempt.id))();
-    }, 1800);
-    return;
-  }
   if (attempt.status === "FAILED") {
     const failure = panel("辨識失敗");
     add(
@@ -462,6 +685,7 @@ async function jobPage(id, selectedId) {
       ),
     );
   const revisions = await api(`/api/jobs/${id}/confirmations`);
+  if (view !== jobView) return;
   const confirmed = revisions.items.find((c) => c.attempt_id === attempt.id);
   if (confirmed)
     stateBadge.textContent = `已人工確認 · 第 ${confirmed.revision_no} 版`;
@@ -543,7 +767,17 @@ async function jobPage(id, selectedId) {
     grid.append(card);
   }
   form.append(grid);
-  const actions = el("div", null, "sticky-actions");
+  const actions = panel("確認與儲存");
+  actions.id = "confirmation-actions";
+  actions.classList.add("confirmation-actions");
+  const confirmationHint = el(
+    "p",
+    confirmed
+      ? `已儲存第 ${confirmed.revision_no} 版；修改內容後請再次確認。`
+      : "請核對下方內容，按確認後即可分享原圖與文字。",
+    "help",
+  );
+  confirmationHint.id = "confirmation-hint";
   const save = button(
     "確認資料並儲存",
     guarded(async () => {
@@ -570,17 +804,45 @@ async function jobPage(id, selectedId) {
             review_active_ms: Math.round(reviewMs),
           },
         });
+        if (view !== jobView) return;
         dirty = false;
         notice(`已儲存人工確認第 ${result.revision_no} 版。`);
         await jobPage(id, attempt.id);
+        document
+          .querySelector("#share-panel")
+          ?.scrollIntoView({ block: "start" });
       } finally {
         save.disabled = false;
       }
     }),
   );
-  actions.append(save);
-  form.append(actions);
-  if (confirmed) form.append(await sharePanel(confirmed));
+  add(actions, confirmationHint, save);
+  root.insertBefore(actions, top);
+  if (confirmed) {
+    try {
+      const sharing = await sharePanel(confirmed, job);
+      if (view !== jobView) {
+        sharing.dispose();
+        return;
+      }
+      disposeShare = () => sharing.dispose();
+      sharing.hidden = dirty;
+      root.insertBefore(sharing, actions);
+    } catch (error) {
+      if (view !== jobView) return;
+      const failedShare = panel("分享資料暫時無法載入");
+      add(
+        failedShare,
+        el("p", error.message, "error"),
+        button(
+          "重新載入分享資料",
+          guarded(() => jobPage(id, attempt.id)),
+          "secondary",
+        ),
+      );
+      root.insertBefore(failedShare, actions);
+    }
+  }
   const retry = panel("重新辨識");
   const profile = profileSelect();
   add(
@@ -595,6 +857,7 @@ async function jobPage(id, selectedId) {
             method: "POST",
             body: { profile_id: profile.value },
           });
+          if (view !== jobView) return;
           dirty = false;
           await jobPage(id);
         }),

@@ -57,7 +57,11 @@ TRUSTED_HOSTS=localhost,127.0.0.1,你的Mac內網IP,你的DDNS完整網域
 
 設定存取碼後，頁面、API、原圖、處理圖、歷史與資料集下載均需登入。僅使用 Tailscale 時也可將 `APP_HOST` 設為該 Mac 的 Tailscale IP，並加入 `TRUSTED_HOSTS`。無存取碼的服務只接受本機或 Tailscale 來源。
 
-分享按鈕偵測瀏覽器功能：原生分享 → 剪貼簿 → 選取文字後手動複製。使用者自行在 LINE 選擇收件者並傳送；系統不宣稱訊息已送達。
+確認與分享操作位於結果頁最上方。辨識中維持固定載入畫面，只更新狀態，完成後才切換結果。
+
+分享前會預載原始相片，支援檔案分享的瀏覽器可將原圖與已確認文字交給手機分享功能；不支援時提供「儲存原始相片」與「開啟 LINE 帶入文字」兩步操作。普通 HTTP 網址通常沒有 Web Share API，無法只靠前端強制叫出原生圖文分享；LINE 文字連結不會自動夾帶圖片。使用者自行加入原圖、選擇收件者並傳送；系統不宣稱訊息已送達。若 LINE 只接收圖片，可再使用複製文字。
+
+「複製文字」與「複製紀錄連結」支援 HTTP 的傳統複製方式，只有瀏覽器回報複製成功才顯示成功；皆受阻時展開並選取文字供手動複製。原始圖片不轉檔、不公開上傳，紀錄連結仍受原本存取保護。
 
 詳細部署、停機與備份請見 [docs/deployment.md](docs/deployment.md)。
 
@@ -102,6 +106,7 @@ TRUSTED_HOSTS=localhost,127.0.0.1,你的Mac內網IP,你的DDNS完整網域
 uv run pytest -q
 uv run ruff check --config pyproject.toml app tests
 node --check static/js/app.js
+node --test tests/frontend/*.test.cjs
 ```
 
 測試包括兩種 Provider HTTP 格式與錯誤、Schema／Normalize、規則驗證、JPEG／HEIC／EXIF、上傳限制、工作恢復、人工修正版本、分享資格、私有匯出、分組洩漏、逐欄回歸與存取保護。測試圖片及模型輸出都是合成 fixture，不是現場 Benchmark 成績。
