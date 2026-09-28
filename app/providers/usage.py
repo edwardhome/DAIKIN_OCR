@@ -24,6 +24,36 @@ def normalize_token_usage(provider, raw_result):
     elif provider == "ollama":
         result["input_tokens"] = _count(raw_result.get("prompt_eval_count"))
         result["output_tokens"] = _count(raw_result.get("eval_count"))
+    elif provider == "gemini":
+        usage = raw_result.get("usageMetadata")
+        if not isinstance(usage, dict):
+            return result
+        result["input_tokens"] = _count(usage.get("promptTokenCount"))
+        result["total_tokens"] = _count(usage.get("totalTokenCount"))
+        candidates = _count(usage.get("candidatesTokenCount"))
+        thoughts = _count(usage.get("thoughtsTokenCount"))
+        no_tools = "toolUsePromptTokenCount" not in usage or (
+            _count(usage["toolUsePromptTokenCount"]) == 0
+        )
+        if candidates is not None and thoughts is not None:
+            result["output_tokens"] = candidates + thoughts
+        elif (
+            result["input_tokens"] is not None
+            and result["total_tokens"] is not None
+            and result["total_tokens"] >= result["input_tokens"]
+            and no_tools
+        ):
+            # Total includes thoughts. An absent thoughts count does not imply zero.
+            output = result["total_tokens"] - result["input_tokens"]
+            if all(count is None or output >= count for count in (candidates, thoughts)):
+                result["output_tokens"] = output
+        if (
+            result["total_tokens"] is None
+            and no_tools
+            and all(result[key] is not None for key in ("input_tokens", "output_tokens"))
+        ):
+            result["total_tokens"] = result["input_tokens"] + result["output_tokens"]
+        return result
     else:
         return result
     if result["total_tokens"] is None and all(

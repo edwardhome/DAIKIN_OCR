@@ -60,12 +60,12 @@ test("HTTP copy executes before returning and reports the command's true success
       execCommand(command) {
         called = true;
         assert.equal(command, "copy");
-        assert.equal(field.value, "銘牌\nRHF50RVLT");
+        assert.equal(field.value, "RHF30RVLT\nE045859");
         return true;
       },
     },
   });
-  const pending = sharing.copyText("銘牌\nRHF50RVLT", field);
+  const pending = sharing.copyText("RHF30RVLT\nE045859", field);
   assert.equal(called, true);
   const result = await pending;
   assert.equal(result.copied, true);
@@ -240,9 +240,14 @@ test("native share runs synchronously with the original file and confirmed text"
       },
     },
   });
-  const pending = sharing.shareConfirmed({ file, text: "已人工確認的資料" });
+  const pending = sharing.shareConfirmed({
+    file,
+    text: "RHF30RVLT\nE045859",
+    title: "大金空調設備資料",
+  });
   assert.equal(payload.files[0], file);
-  assert.equal(payload.text, "已人工確認的資料");
+  assert.equal(payload.text, "RHF30RVLT\nE045859");
+  assert.deepEqual(Object.keys(payload).sort(), ["files", "text"]);
   assert.equal((await pending).status, "shared");
 });
 
@@ -298,4 +303,12 @@ test("LINE text link preserves Chinese, newlines and URL-reserved characters", (
   assert.equal(url.origin, "https://line.me");
   assert.equal(url.pathname, "/R/share");
   assert.equal(url.searchParams.get("text"), value);
+});
+
+test("LINE fallback contains only the two confirmed identifier lines", () => {
+  const sharing = load();
+  const text = "RHF30RVLT\nE045859";
+  const url = new URL(sharing.lineTextUrl(text));
+  assert.equal(url.searchParams.get("text"), text);
+  assert.deepEqual([...url.searchParams.keys()], ["text"]);
 });

@@ -56,9 +56,7 @@ def test_identity_scope_end_to_end_keeps_raw_observation_and_only_three_fields(
     assert len(revision["annotations"]) == 3
     assert set(revision["human_ground_truth"]["fields"]) == set(IDENTITY_FIELDS)
     assert revision["human_ground_truth"]["schema_version"] == IDENTITY_SCHEMA_VERSION
-    assert "室外機型號：RHF50RVLT" in revision["share_text"]
-    assert "冷媒" not in revision["share_text"]
-    assert "電源" not in revision["share_text"]
+    assert revision["share_text"] == "RHF50RVLT\nE015283"
 
 
 def test_identity_failure_can_be_confirmed_but_wrong_field_scope_is_rejected(app, client, headers):

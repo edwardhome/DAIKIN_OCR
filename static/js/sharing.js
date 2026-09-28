@@ -188,14 +188,13 @@
 
   // Call directly from a click after prepareOriginal has completed. Never fetch
   // here: navigator.share must run before the browser drops the user's gesture.
-  function shareConfirmed({ file, text, title = "大金空調設備資料" } = {}) {
+  function shareConfirmed({ file, text } = {}) {
     if (!canShareFiles(file)) return Promise.resolve({ status: "unsupported" });
     try {
       return Promise.resolve(
         global.navigator.share({
           files: [file],
           text: String(text ?? ""),
-          title,
         }),
       ).then(() => ({ status: "shared" }), shareFailure);
     } catch (error) {

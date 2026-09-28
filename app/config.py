@@ -5,6 +5,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from app.providers import SUPPORTED_PROVIDERS
+
 ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -41,6 +43,7 @@ def settings(overrides=None):
         "PROVIDER_TIMEOUT": float(env.get("PROVIDER_TIMEOUT_SECONDS", "180")),
         "MAX_TOKENS": int(env.get("MODEL_MAX_TOKENS", "4096")),
         "NVIDIA_API_KEY": env.get("NVIDIA_API_KEY", ""),
+        "GEMINI_API_KEY": env.get("GEMINI_API_KEY", ""),
         "HIGH_CONFIDENCE_THRESHOLD": float(env.get("HIGH_CONFIDENCE_THRESHOLD", ".95")),
         "LOW_CONFIDENCE_THRESHOLD": float(env.get("LOW_CONFIDENCE_THRESHOLD", ".80")),
         "REGRESSION_MAX_DROP": float(env.get("REGRESSION_MAX_DROP", "0")),
@@ -67,11 +70,20 @@ def settings(overrides=None):
             "reasoning_effort": env.get("NVIDIA_REASONING_EFFORT", ""),
             "max_image_bytes": int(env.get("NVIDIA_MAX_IMAGE_BYTES", "5000000")),
         },
+        "gemini": {
+            "id": "gemini",
+            "provider": "gemini",
+            "model": env.get("GEMINI_MODEL", ""),
+            "model_version": env.get("GEMINI_MODEL_VERSION") or None,
+            "base_url": env.get("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta"),
+            "output_mode": "json_schema",
+            "max_image_bytes": int(env.get("GEMINI_MAX_IMAGE_BYTES", "10000000")),
+        },
     }
     path = ROOT / env.get("PROFILES_FILE", "config/profiles.toml")
     if path.exists():
         for item in tomllib.loads(path.read_text()).get("profiles", []):
-            if item.get("provider") not in {"ollama", "nvidia"} or not item.get("id"):
+            if item.get("provider") not in SUPPORTED_PROVIDERS or not item.get("id"):
                 raise ValueError("Invalid provider profile")
             base = dict(profiles[item["provider"]])
             base.update(

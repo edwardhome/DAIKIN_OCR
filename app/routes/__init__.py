@@ -20,6 +20,7 @@ from sqlalchemy import select
 
 from app.errors import AppError
 from app.models import Attempt, Benchmark, BenchmarkItem, Confirmation, DatasetVersion, Job, db, now
+from app.providers import provider_is_configured
 from app.schemas import CORRECTION_TYPES, FIELD_SPECS, field_metadata, prompt_field_names
 from app.services import benchmark, datasets
 from app.services.confirmations import confirm, share_text
@@ -119,8 +120,7 @@ def bootstrap():
                 "id": p["id"],
                 "provider": p["provider"],
                 "model": p["model"],
-                "configured": bool(p["model"])
-                and (p["provider"] != "nvidia" or bool(cfg["NVIDIA_API_KEY"])),
+                "configured": provider_is_configured(cfg, p),
             }
             for p in cfg["PROFILES"].values()
         ],

@@ -6,11 +6,13 @@
 
 ## 目前版本與發布界線
 
+本地開發版另增加兩行 LINE 分享與 Google AI Studio／Gemini，尚未部署 NAS；仍依本地驗證、使用者接受後再發布的流程進行。Mac 背景服務已依使用者要求關閉，這次測試僅用隔離暫存環境。
+
 截至 2026-09-28，使用者已完成 Mac 手機驗證並同意發布，NAS 的 `current` 已指向 `/volume1/homes/edward61221/nameplate/releases/20260928-identity-e4a62f9`，程式 commit 為 `e4a62f91a773bc4bd74e3dea36819bda6067d40a`。新辨識使用 `nameplate_identity_v002`，只擷取室外機型號、室內機型號、序號；歷史 19 欄與原 `nameplate_v001` 保留。預設仍為 NVIDIA NIM `z-ai/glm-5.3-flash`，`NVIDIA_REASONING_EFFORT` 未設定，不套用低思考量實驗。
 
 本次沿用 NAS 的共享資料，未以 Mac 快照覆寫，沒有資料庫 migration 或依賴變更。已核對新 API 預設三欄、歷史欄位目錄仍有 19 欄，既有 12 筆工作、14 次辨識、9 版人工確認、171 筆欄位標註及 13 筆模型觀測不變；12 張原圖雜湊與 9 版既有分享文字均通過核對，SQLite 完整性正常。備份位於 `backups/20260928-identity-e4a62f9-retry1/`。另以 NAS 既有真實照片在專案外的隔離暫存環境完成一次三欄 NIM 辨識，推論 79.67 秒、3,116 tokens；暫存已清除，正式資料庫未新增測試紀錄或人工答案，詳見 [驗證紀錄](verification.md)。
 
-之前的 `20260928-branding-v2` 是先行發布的名稱修補版，主標題「陳憲隆自製 大金空調銘牌辨識」與小字副標題「AI 智慧影像辨識」沿用。Mac 測試服務目前仍開啟；NAS 是正式資料來源，兩台主機的新增資料不會自動同步。
+之前的 `20260928-branding-v2` 是先行發布的名稱修補版，主標題「陳憲隆自製 大金空調銘牌辨識」與小字副標題「AI 智慧影像辨識」沿用。Mac 背景服務目前已關閉；NAS 是正式資料來源，兩台主機的新增資料不會自動同步。
 
 NAS release 透過複製程式檔案部署，裡面沒有 `.git`。GitHub 更新不會自動改變 NAS，不能在 `current` 內用 `git pull` 當成發布流程。
 

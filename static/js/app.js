@@ -361,7 +361,7 @@ async function sharePanel(confirmation, job) {
   feedback.setAttribute("role", "status");
   const preview = el("details");
   const text = el("textarea");
-  text.rows = 9;
+  text.rows = 2;
   text.readOnly = true;
   text.value = data.text;
   text.setAttribute("aria-label", "LINE 分享文字");
@@ -442,7 +442,6 @@ async function sharePanel(confirmation, job) {
         const result = await sharing.shareConfirmed({
           file: original.file,
           text: data.text,
-          title: "大金空調設備資料",
         });
         if (result.status === "shared") {
           feedback.textContent =

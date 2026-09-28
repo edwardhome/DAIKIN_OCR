@@ -110,29 +110,10 @@ def share_text(confirmation):
     fields = confirmation.human_ground_truth["fields"]
 
     def display(name):
-        entry = fields[name]
-        value = entry["value"]
+        value = fields.get(name, {}).get("value")
         if value is None:
-            return "未提供"
-        if isinstance(value, float):
-            value = f"{value:g}"
-        value = " ".join(str(value).split())
-        return value + (f" {entry['unit']}" if entry.get("unit") else "")
+            return ""
+        # Keep exactly two lines even when an older confirmation contains line breaks.
+        return "".join(str(value).splitlines()).strip()
 
-    lines = ["【大金空調設備資料】"]
-    for name in (
-        "outdoor_model",
-        "indoor_model",
-        "serial_number",
-        "refrigerant",
-        "refrigerant_charge",
-    ):
-        if name in fields:
-            lines.append(f"{FIELD_SPECS[name][0]}：{display(name)}")
-    if "power_voltage" in fields and "power_frequency" in fields:
-        lines.append(f"電源：{display('power_voltage')} / {display('power_frequency')}")
-    for name in ("cooling_capacity", "heating_capacity", "manufacture_year"):
-        if name in fields:
-            lines.append(f"{FIELD_SPECS[name][0]}：{display(name)}")
-    lines.append("資料由空調銘牌辨識系統產生")
-    return "\n".join(lines)
+    return f"{display('outdoor_model')}\n{display('serial_number')}"

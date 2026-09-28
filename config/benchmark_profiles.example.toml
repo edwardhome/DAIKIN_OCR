@@ -10,3 +10,9 @@ provider = "nvidia"
 model = "REPLACE_WITH_YOUR_NVIDIA_VISION_MODEL"
 model_version = ""
 output_mode = "prompt"
+
+[[profiles]]
+id = "google-baseline"
+provider = "gemini"
+model = "gemini-flash-latest"
+model_version = ""

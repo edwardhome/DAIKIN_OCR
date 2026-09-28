@@ -245,9 +245,12 @@ test("token counts preserve real zero and do not invent missing or invalid usage
 
 test("only an explicit quota exhaustion receives the NIM quota warning", () => {
   const { review } = load();
-  const quota = review.failurePresentation({ error_code: "PROVIDER_QUOTA_EXHAUSTED" });
+  const quota = review.failurePresentation({ provider: "nvidia", error_code: "PROVIDER_QUOTA_EXHAUSTED" });
   assert.equal(quota.title, "NIM 額度不足");
   assert.equal(quota.quota, true);
+  const gemini = review.failurePresentation({ provider: "gemini", error_code: "PROVIDER_QUOTA_EXHAUSTED" });
+  assert.equal(gemini.title, "Gemini 額度不足");
+  assert.doesNotMatch(gemini.help, /NIM/);
   const limited = review.failurePresentation({ error_code: "PROVIDER_RATE_LIMITED" });
   assert.equal(limited.quota, false);
   assert.equal(limited.title, "暫時受到流量限制");

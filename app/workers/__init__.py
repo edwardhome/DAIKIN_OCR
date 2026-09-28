@@ -6,10 +6,10 @@ from datetime import datetime
 
 from sqlalchemy import select, update
 
-from app.errors import AppError
+from app.errors import AppError, ProviderError
 from app.image import ImagePreprocessor
 from app.models import Attempt, Job, Observation, db, now, uid
-from app.providers import InferenceImage, make_provider
+from app.providers import SUPPORTED_PROVIDERS, InferenceImage, make_provider, provider_api_key
 from app.schemas import snapshot_field_names
 from app.services.normalize import normalize, parse_output
 from app.validators import validate
@@ -36,7 +36,11 @@ def recover_expired():
 def claim(provider=None):
     query = select(Attempt.id).where(Attempt.status == "QUEUED").order_by(Attempt.created_at)
     if provider:
-        query = query.where(Attempt.provider == provider)
+        query = query.where(
+            Attempt.provider.in_(provider)
+            if isinstance(provider, (tuple, list))
+            else Attempt.provider == provider
+        )
     for identifier in db.session.scalars(query.limit(20)).all():
         worker_id = uid()
         count = db.session.execute(
@@ -81,7 +85,7 @@ def run_attempt(app, identifier, worker_id):
                 snapshot["profile"],
                 timeout=snapshot["timeout_seconds"],
                 max_tokens=snapshot["max_tokens"],
-                api_key=app.config["NVIDIA_API_KEY"],
+                api_key=provider_api_key(app.config, snapshot["profile"]["provider"]),
             )
             provider_started = time.monotonic()
             response = provider.recognize(
@@ -108,6 +112,12 @@ def run_attempt(app, identifier, worker_id):
             )
             db.session.add(observation)
             db.session.commit()  # Preserve observation even if parsing fails next.
+            if response.error_code:
+                raise ProviderError(
+                    response.error_code,
+                    response.error_message or "模型服務的回覆格式無效。",
+                    False,
+                )
             if response.refused:
                 raise AppError(
                     "MODEL_REFUSAL", "模型未接受這次辨識，請重新拍攝或改用其他模型。", 502, True
@@ -207,7 +217,11 @@ def run_attempt(app, identifier, worker_id):
 
 
 def worker(app, once=False):
-    # One local and one cloud slot; local model calls never overlap in this worker.
+    # Keep one local and one shared cloud slot even when more providers are configured.
+    slots = {
+        "local": ("ollama",),
+        "cloud": tuple(p for p in SUPPORTED_PROVIDERS if p != "ollama"),
+    }
     with ThreadPoolExecutor(max_workers=2) as executor:
         active = {}
         while True:
@@ -228,12 +242,12 @@ def worker(app, once=False):
                             .values(lease_until=time.time() + app.config["LEASE_SECONDS"])
                         )
                 db.session.commit()
-                for provider in ("ollama", "nvidia"):
-                    if provider not in active:
-                        claimed = claim(provider)
+                for slot, providers in slots.items():
+                    if slot not in active:
+                        claimed = claim(providers)
                         if claimed:
                             identifier, owner = claimed
-                            active[provider] = (
+                            active[slot] = (
                                 executor.submit(run_attempt, app, identifier, owner),
                                 identifier,
                                 owner,

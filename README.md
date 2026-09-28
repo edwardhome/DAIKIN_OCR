@@ -8,7 +8,7 @@ Python 3.12+、uv、Flask、SQLite、HTML/CSS/Vanilla JavaScript。預設 HTTP *
 
 完整使用流程、狀態機、資料飛輪、模型評估及 M6 容量／價格參考，請見 [操作手冊](操作手冊.md)。
 
-2026-09-28 版本狀態：使用者已完成 Mac 手機驗證，三欄版本已部署台中 NAS，release 為 `20260928-identity-e4a62f9`，程式 commit 為 `e4a62f9`。新辨識使用 `nameplate_identity_v002`，只擷取**室外機型號、室內機型號、序號**；既有 `nameplate_v001` 的 19 欄結果、人工版本與原 Prompt 保留。本次沿用 NAS 的既有資料，未以 Mac 資料覆寫；Mac 測試服務仍開啟。[NAS 入口](http://home-taichung.myds.me:50003/)・[部署與回復流程](docs/nas-deployment.md)
+2026-09-28 版本狀態：NAS 目前使用已驗收的三欄版本 `20260928-identity-e4a62f9`。新辨識使用 `nameplate_identity_v002`，只擷取**室外機型號、室內機型號、序號**；歷史 19 欄與人工版本保留。Mac 背景服務依使用者要求關閉；本地開發版另加入兩行 LINE 分享與 Gemini Provider，尚未更新 NAS。[NAS 入口](http://home-taichung.myds.me:50003/)・[部署與回復流程](docs/nas-deployment.md)
 
 ## 快速啟動
 
@@ -75,6 +75,15 @@ TRUSTED_HOSTS=localhost,127.0.0.1,你的Mac內網IP,你的DDNS完整網域
 
 確認與分享操作位於結果頁最上方。辨識中維持固定載入畫面，只更新狀態，完成後才切換結果。
 
+本地新版的分享／複製文字僅有人工確認的室外機型號與序號兩行，沒有標題、欄位名稱、室內機或頁尾；照片分享保留。例如：
+
+```text
+RHF30RVLT
+E045859
+```
+
+新三欄及歷史 19 欄確認版本皆使用此格式。缺值保留對應空行，不自行補字，也不改寫保存的 AI 或人工資料。
+
 分享前會預載原始相片，支援檔案分享的瀏覽器可將原圖與已確認文字交給手機分享功能；不支援時提供「儲存原始相片」與「開啟 LINE 帶入文字」兩步操作。普通 HTTP 網址通常沒有 Web Share API，無法只靠前端強制叫出原生圖文分享；LINE 文字連結不會自動夾帶圖片。使用者自行加入原圖、選擇收件者並傳送；系統不宣稱訊息已送達。若 LINE 只接收圖片，可再使用複製文字。
 
 「複製文字」與「複製紀錄連結」支援 HTTP 的傳統複製方式，只有瀏覽器回報複製成功才顯示成功；皆受阻時展開並選取文字供手動複製。原始圖片不轉檔、不公開上傳，紀錄連結仍受原本存取保護。
@@ -97,11 +106,24 @@ NAS 原生背景服務與搬遷方式見 [NAS 部署](docs/nas-deployment.md)。
 
 辨識失敗仍能重試、重拍，或人工填寫後確認。型號依規則轉大寫、移除空白；序號不替換易混淆字元。量測單位不明時保持 null。UI 的信心枚舉是模型自評，不是統計機率。
 
-## NVIDIA NIM 與多模型比較
+## NVIDIA NIM、Gemini 與多模型比較
 
 設定 `NVIDIA_API_KEY`、`NVIDIA_MODEL` 與 `NVIDIA_BASE_URL`。預設 adapter 使用同步 `/chat/completions`，圖片以 base64 傳送。按模型官方規格選擇 `NVIDIA_OUTPUT_MODE=prompt/json_object/json_schema` 與圖片大小限制。非同步 202 端點會回報明確的不支援訊息，不會無限輪詢或重試。
 
 若以 NVIDIA 為一般辨識預設，設定 `VISION_PROVIDER=nvidia`。金鑰僅存 `.env`。缺少金鑰時無法實際驗證雲端推論；自動化測試使用模擬 HTTP 回覆。
+
+Google AI Studio 的 Gemini 使用原生 `generateContent` 介面。於伺服器 `.env` 設定以下項目，再於首頁模型選單選 `gemini`，即可沿用上傳、人工確認、耗時、token 與 Benchmark 流程。NIM 預設不變；若要改預設再設定 `VISION_PROVIDER=gemini`。
+
+```dotenv
+GEMINI_API_KEY=填入自己的金鑰
+GEMINI_MODEL=gemini-flash-latest
+GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta
+GEMINI_MAX_IMAGE_BYTES=10000000
+```
+
+金鑰只透過 `X-goog-api-key` header 送至供應商，不進 URL、設定快照、前端或 Git。推論圖以 inlineData 傳送，使用 JSON Schema 約束輸出；不另上傳至 Files API。模型名稱可設定，實際回傳的 `modelVersion` 另存，方便追蹤 `latest` 別名的版本差異。Gemini 輸出 token 含可取得的思考 token；總數優先使用 API 回報，缺資料顯示「未提供」。429 顯示流量限制，不宣稱免費額度已用完；拒答、截斷與不完整回覆均保留可取得的觀測並要求人工處理。[Google 官方 API 與用量欄位](https://ai.google.dev/api/generate-content)
+
+Worker 維持一個本地、一個雲端工作名額，NIM 與 Gemini 共用雲端名額，不會因增加 Provider 而自動提高並發。`config/benchmark_profiles.example.toml` 提供 Gemini 比較設定；不會自動切換供應商或無限重試。
 
 複製 `config/benchmark_profiles.example.toml` 至 `config/profiles.toml`，填入其他本地／雲端模型識別。前端只可選伺服器已登記的 profile，不能指定任意服務網址。
 
@@ -129,7 +151,7 @@ node --check static/js/app.js
 node --test tests/frontend/*.test.cjs
 ```
 
-測試包括兩種 Provider HTTP 格式與錯誤、Schema／Normalize、規則驗證、JPEG／HEIC／EXIF、上傳限制、工作恢復、人工修正版本、分享資格、私有匯出、分組洩漏、逐欄回歸與存取保護。測試圖片及模型輸出都是合成 fixture，不是現場 Benchmark 成績。
+測試包括三種 Provider HTTP 格式與錯誤、Schema／Normalize、規則驗證、JPEG／HEIC／EXIF、上傳限制、工作恢復、人工修正版本、兩行分享與資格、私有匯出、分組洩漏、逐欄回歸與存取保護。自動化測試圖片及模型輸出都是隔離 fixture，不是現場 Benchmark 成績；實際雲端辨識另使用現場照片。
 
 `DEBUG_DATA=true` 才開放 `/api/attempts/<id>/debug`；仍受存取保護。一般 UI 不提供原始回覆。SQLite migrations 由 `uv run nameplate init-db` 套用；資料模型變更需新增 migration，不能覆寫已使用版本。
 

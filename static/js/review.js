@@ -47,9 +47,10 @@
 
   function failurePresentation(attempt) {
     if (attempt.error_code === "PROVIDER_QUOTA_EXHAUSTED") {
+      const provider = { nvidia: "NIM", gemini: "Gemini" }[attempt.provider] || "模型服務";
       return {
-        title: "NIM 額度不足",
-        help: "請確認 NIM 帳戶額度後重新辨識，或切換其他已設定的模型；也可以依照片人工填寫。",
+        title: `${provider} 額度不足`,
+        help: `請確認 ${provider} 帳戶額度後重新辨識，或切換其他已設定的模型；也可以依照片人工填寫。`,
         quota: true,
       };
     }

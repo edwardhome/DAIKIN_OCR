@@ -43,7 +43,7 @@ def test_complete_workflow_and_immutable_revisions(app, client, headers):
     aid = job["attempts"][-1]["id"]
     assert client.get(f"/api/confirmations/{aid}/share-text").status_code == 404
     first = confirm_job(client, headers, job, outdoor_model="RHF50RVLT")
-    assert "室外機型號：RHF50RVLT" in first["share_text"]
+    assert first["share_text"] == "RHF50RVLT\nE015283"
     assert len(first["annotations"]) == 19
     field = next(a for a in first["annotations"] if a["field_name"] == "outdoor_model")
     assert field["ai_value"] == "RHF5ORVLT" and field["human_value"] == "RHF50RVLT"
@@ -57,6 +57,7 @@ def test_complete_workflow_and_immutable_revisions(app, client, headers):
     current = client.get(f"/api/jobs/{job['id']}").json
     second = confirm_job(client, headers, current, outdoor_model="RHF51RVLT")
     assert second["revision_no"] == 2
+    assert second["share_text"] == "RHF51RVLT\nE015283"
     changed = next(a for a in second["annotations"] if a["field_name"] == "outdoor_model")
     assert changed["before_value"] == "RHF50RVLT"
     assert changed["ai_value"] == "RHF5ORVLT"
