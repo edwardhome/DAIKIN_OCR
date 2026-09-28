@@ -243,6 +243,25 @@ test("token counts preserve real zero and do not invent missing or invalid usage
   );
 });
 
+test("overloaded models ask users to switch without claiming quota is exhausted", () => {
+  const { review } = load();
+  const busy = review.failurePresentation({ provider: "gemini", error_code: "PROVIDER_OVERLOADED" });
+  assert.equal(busy.title, "需求量過高，請更換模型");
+  assert.equal(busy.overloaded, true);
+  assert.equal(busy.quota, false);
+  assert.match(busy.help, /NVIDIA NIM/);
+  assert.match(busy.help, /重新辨識/);
+  assert.doesNotMatch(busy.help, /額度不足|用完|自動切換/);
+  assert.equal(review.failurePresentation({ error_code: "PROVIDER_API_ERROR" }).overloaded, undefined);
+  const previous = review.failurePresentation({
+    provider: "gemini", error_code: "PROVIDER_API_ERROR", error_message: "模型服務回傳 HTTP 503。",
+  });
+  assert.equal(previous.title, "模型服務暫時無法使用，請更換模型");
+  assert.equal(previous.overloaded, true);
+  assert.doesNotMatch(previous.title, /需求量過高/);
+  assert.match(review.failurePresentation({ provider: "nvidia", error_code: "PROVIDER_OVERLOADED" }).help, /Gemini/);
+});
+
 test("only an explicit quota exhaustion receives the NIM quota warning", () => {
   const { review } = load();
   const quota = review.failurePresentation({ provider: "nvidia", error_code: "PROVIDER_QUOTA_EXHAUSTED" });

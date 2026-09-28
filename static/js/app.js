@@ -711,10 +711,16 @@ async function jobPage(id, selectedId, receivedJob) {
   photo.append(labeled("照片難度（人工標記）", difficulty));
   add(split, photo, form);
   root.append(split);
+  let modelChangeHint = null;
   if (attempt.status === "FAILED") {
     const presentation = window.NameplateReview.failurePresentation(attempt);
     const failure = panel(presentation.title);
     if (presentation.quota) failure.classList.add("quota-warning");
+    if (presentation.overloaded) {
+      failure.classList.add("provider-warning");
+      failure.setAttribute("role", "alert");
+      modelChangeHint = failure;
+    }
     add(
       failure,
       el("p", attempt.error_message, "error"),
@@ -912,6 +918,16 @@ async function jobPage(id, selectedId, receivedJob) {
   }
   const retry = panel("重新辨識");
   const profile = profileSelect();
+  retry.id = "retry-recognition";
+  profile.setAttribute("aria-label", "重新辨識模型");
+  if (modelChangeHint) {
+    const changeModel = button("更換模型", () => {
+      retry.scrollIntoView({ block: "center" });
+      profile.focus({ preventScroll: true });
+    }, "secondary");
+    changeModel.setAttribute("aria-controls", retry.id);
+    modelChangeHint.append(changeModel);
+  }
   add(
     retry,
     profile,

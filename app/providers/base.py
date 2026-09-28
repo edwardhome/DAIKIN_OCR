@@ -22,6 +22,23 @@ def _explicit_quota_error(response):
     )
 
 
+def _explicit_overload_error(response):
+    """Classify overload only from an explicit structured provider message."""
+    try:
+        body = response.json()
+    except ValueError:
+        return False
+    error = body.get("error") if isinstance(body, dict) else None
+    message = error.get("message") if isinstance(error, dict) else None
+    if not isinstance(message, str):
+        return False
+    message = " ".join(message.casefold().split())
+    return any(
+        marker in message
+        for marker in ("high demand", "overloaded", "at capacity", "capacity exhausted")
+    )
+
+
 class HttpProvider:
     def __init__(self, profile, *, timeout, max_tokens, api_key="", transport=None):
         self.profile, self.timeout, self.max_tokens = profile, timeout, max_tokens
@@ -53,6 +70,10 @@ class HttpProvider:
                 )
             if response.status_code == 429:
                 raise ProviderError("PROVIDER_RATE_LIMITED", "模型服務忙碌，請稍後重新辨識。")
+            if response.status_code == 503 and _explicit_overload_error(response):
+                raise ProviderError(
+                    "PROVIDER_OVERLOADED", "模型需求量過高，請更換模型後重新辨識。"
+                )
             if response.status_code == 202:
                 raise ProviderError(
                     "PROVIDER_ASYNC_UNSUPPORTED",

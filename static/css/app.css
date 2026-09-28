@@ -257,11 +257,13 @@ button.transcript-field {
 .recognition-tokens {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
-.quota-warning {
+.quota-warning,
+.provider-warning {
   border-color: #cd7479;
   background: #fff7f6;
 }
-.quota-warning h2 {
+.quota-warning h2,
+.provider-warning h2 {
   color: var(--bad);
 }
 .loading-elapsed {

@@ -46,6 +46,18 @@
   }
 
   function failurePresentation(attempt) {
+    const highDemand = attempt.error_code === "PROVIDER_OVERLOADED";
+    const previousUnavailable = attempt.error_code === "PROVIDER_API_ERROR" &&
+      /\bHTTP 503\b/.test(attempt.error_message || "");
+    if (highDemand || previousUnavailable) {
+      const alternative = attempt.provider === "gemini" ? "NVIDIA NIM" : "Gemini";
+      return {
+        title: highDemand ? "需求量過高，請更換模型" : "模型服務暫時無法使用，請更換模型",
+        help: `目前模型忙碌，請在「重新辨識」選擇其他已設定模型（例如 ${alternative}），再按「重新辨識」。也可以稍後重試。`,
+        quota: false,
+        overloaded: true,
+      };
+    }
     if (attempt.error_code === "PROVIDER_QUOTA_EXHAUSTED") {
       const provider = { nvidia: "NIM", gemini: "Gemini" }[attempt.provider] || "模型服務";
       return {
