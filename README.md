@@ -8,7 +8,7 @@ Python 3.12+、uv、Flask、SQLite、HTML/CSS/Vanilla JavaScript。預設 HTTP *
 
 完整使用流程、狀態機、資料飛輪、模型評估及 M6 容量／價格參考，請見 [操作手冊](操作手冊.md)。
 
-2026-09-28 版本狀態：本工作目錄是待使用者本機驗收的三欄候選版，新的辨識使用 `nameplate_identity_v002`，只擷取**室外機型號、室內機型號、序號**；既有 `nameplate_v001` 的 19 欄結果、人工版本與原 Prompt 保留。NAS 目前使用 `20260928-branding-v2`，只更新系統名稱，尚未部署三欄版本。Mac 原正式背景服務已停止；本機測試完成並獲接受後才更新 NAS。[部署與回復流程](docs/nas-deployment.md)
+2026-09-28 版本狀態：使用者已完成 Mac 手機驗證，三欄版本已部署台中 NAS，release 為 `20260928-identity-e4a62f9`，程式 commit 為 `e4a62f9`。新辨識使用 `nameplate_identity_v002`，只擷取**室外機型號、室內機型號、序號**；既有 `nameplate_v001` 的 19 欄結果、人工版本與原 Prompt 保留。本次沿用 NAS 的既有資料，未以 Mac 資料覆寫；Mac 測試服務仍開啟。[NAS 入口](http://home-taichung.myds.me:50003/)・[部署與回復流程](docs/nas-deployment.md)
 
 ## 快速啟動
 

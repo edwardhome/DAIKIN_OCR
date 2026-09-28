@@ -6,9 +6,11 @@
 
 ## 目前版本與發布界線
 
-截至 2026-09-28，NAS 的 `current` 指向 `/volume1/homes/edward61221/nameplate/releases/20260928-branding-v2`。這次僅套用主標題「陳憲隆自製 大金空調銘牌辨識」與小字副標題「AI 智慧影像辨識」，辨識流程仍是原 19 欄版本。此名稱修正是三欄候選版等待驗收期間的單獨修補。
+截至 2026-09-28，使用者已完成 Mac 手機驗證並同意發布，NAS 的 `current` 已指向 `/volume1/homes/edward61221/nameplate/releases/20260928-identity-e4a62f9`，程式 commit 為 `e4a62f91a773bc4bd74e3dea36819bda6067d40a`。新辨識使用 `nameplate_identity_v002`，只擷取室外機型號、室內機型號、序號；歷史 19 欄與原 `nameplate_v001` 保留。預設仍為 NVIDIA NIM `z-ai/glm-5.3-flash`，`NVIDIA_REASONING_EFFORT` 未設定，不套用低思考量實驗。
 
-Mac 工作目錄正在準備 `nameplate_identity_v002`，新辨識只擷取室外機型號、室內機型號、序號，歷史 19 欄與原 `nameplate_v001` 保留。**三欄版本尚未部署 NAS，須先由使用者完成本機測試並接受結果。** Mac 原正式背景服務已停止；測試服務應與正式資料分開。
+本次沿用 NAS 的共享資料，未以 Mac 快照覆寫，沒有資料庫 migration 或依賴變更。已核對新 API 預設三欄、歷史欄位目錄仍有 19 欄，既有 12 筆工作、14 次辨識、9 版人工確認、171 筆欄位標註及 13 筆模型觀測不變；12 張原圖雜湊與 9 版既有分享文字均通過核對，SQLite 完整性正常。備份位於 `backups/20260928-identity-e4a62f9-retry1/`。另以 NAS 既有真實照片在專案外的隔離暫存環境完成一次三欄 NIM 辨識，推論 79.67 秒、3,116 tokens；暫存已清除，正式資料庫未新增測試紀錄或人工答案，詳見 [驗證紀錄](verification.md)。
+
+之前的 `20260928-branding-v2` 是先行發布的名稱修補版，主標題「陳憲隆自製 大金空調銘牌辨識」與小字副標題「AI 智慧影像辨識」沿用。Mac 測試服務目前仍開啟；NAS 是正式資料來源，兩台主機的新增資料不會自動同步。
 
 NAS release 透過複製程式檔案部署，裡面沒有 `.git`。GitHub 更新不會自動改變 NAS，不能在 `current` 內用 `git pull` 當成發布流程。
 
@@ -16,9 +18,11 @@ NAS release 透過複製程式檔案部署，裡面沒有 `.git`。GitHub 更新
 
 ```text
 /volume1/homes/edward61221/nameplate/
-├── current -> releases/20260928-branding-v2
+├── current -> releases/20260928-identity-e4a62f9
 ├── releases/20260928-nim-review-v1/
 ├── releases/20260928-branding-v2/
+├── releases/20260928-identity-e4a62f9/
+├── backups/20260928-identity-e4a62f9-retry1/
 ├── shared/
 │   ├── .env                 # 600；只透過 SSH 傳送
 │   ├── data/                # SQLite、原圖、處理圖
@@ -59,13 +63,13 @@ DSM「控制台 → 任務排程」中，該「觸發的任務 → 使用者定�
 
 NAS 區網位址為 `192.168.0.3`，區網入口為 [NAS 區網網址](http://192.168.0.3:50003/)，外部入口為 [台中 NAS 網址](http://home-taichung.myds.me:50003/)。外部入口需維持 TCP 50003 的路由器轉發及防火牆允許。
 
-2026-09-28 最新檢查，外部 DDNS Port 50003 已回應 HTTP 200；NAS 內部健康檢查與登入也已通過。這是當次連線結果，後續網路異常仍須分別檢查服務、轉發與防火牆。
+2026-09-28 三欄版本發布後，從 Mac 連至外部 DDNS 的 `/healthz` 與 `/login` 均通過，標題與 5 個前端靜態檔案雜湊符合已驗收版本；SSH 中斷後 NAS 服務仍持續運作。這是當次連線結果，後續網路異常仍須分別檢查服務、轉發與防火牆。
 
 `.env` 保留原存取碼，`TRUSTED_HOSTS` 僅加入實際 NAS 名稱、IP、DDNS。前端、API、照片與歷史均需登入。不得把 `.env`、私人照片或資料庫傳入公開程式碼庫。
 
 ## 初次資料搬遷
 
-此次沿用 Mac 的工作與人工確認資料：先用 SQLite backup API 取得一致性快照，再複製該快照所需的不可變原圖／處理圖與資料集。NAS 路徑重定位前保留資料庫備份，使用 `scripts/relocate_storage.py` 驗證檔案雜湊後，交易式更新三種儲存路徑。AI、人工答案、修正歷程及資料集 manifest 內容不變。
+初次搬遷時沿用 Mac 的工作與人工確認資料：先用 SQLite backup API 取得一致性快照，再複製該快照所需的不可變原圖／處理圖與資料集。NAS 路徑重定位前保留資料庫備份，使用 `scripts/relocate_storage.py` 驗證檔案雜湊後，交易式更新三種儲存路徑。AI、人工答案、修正歷程及資料集 manifest 內容不變。
 
 ```sh
 .venv/bin/python scripts/relocate_storage.py \
@@ -84,9 +88,9 @@ NAS 區網位址為 `192.168.0.3`，區網入口為 [NAS 區網網址](http://19
 2. **建立新 release**：將已接受的程式版本複製到 `releases/<新版本名稱>/`，保留可追溯的 Git commit。排除 `.git`、`.env`、`data`、`datasets`、本機 `.venv` 與測試產物。使用 NAS 既有獨立 Python／uv，依 `uv.lock` 安裝新 release 的環境，讓 `.env` 指向 `shared/.env`，確認資料庫、照片與資料集仍使用 `shared` 的固定路徑。
 3. **準備切換**：確認沒有排隊或執行中的工作，備份共享資料的一致性 SQLite 快照及相應照片／資料集，記下 `current` 原目標。保留舊 release 與其 Python 環境。若需要 migration，先確認備份與版本相容性；三欄功能本身不應靠清空資料庫部署。
 4. **停止、切換、啟動**：由舊 `current` 執行 `service.py stop`，再將 `current` symlink 切到新 release，由新 `current` 執行 `service.py start`；兩者都指定同一 `shared/runtime`。不在既有 release 上覆寫程式，也不讓兩個 Worker 同時處理同一資料庫。
-5. **發布後驗證**：檢查 status、`/healthz`、外部登入、舊原圖與確認版本，以及一筆新辨識。核對實際 Prompt／欄位範圍；若 `.env` 明確設定舊 `PROMPT_VERSION`，僅更新程式預設值不會改變它，須在已接受的發布設定中明確指定 `nameplate_identity_v002`。
-6. **有問題時回復**：先停止新服務，將 `current` 指回記錄的舊 release，恢復該版本相容的設定，再啟動及驗證。共享資料先保留，不以開發機快照覆寫；若資料格式已不相容，先保存發布後的新資料，再依備份計畫處理，不能只換程式便宣稱回復完成。
+5. **發布後驗證**：檢查 status、`/healthz`、外部登入、舊原圖與確認版本，以及一筆新辨識。核對實際 Prompt／欄位範圍；若 `.env` 明確設定舊 `PROMPT_VERSION`，僅更新程式預設值不會改變它，須在已接受的發布設定中明確指定 `nameplate_identity_v002`。啟動服務的管理行程也不得殘留舊的設定環境變數；最後以服務 API 與新 Attempt 的設定快照驗證，不能只看 `.env` 檔案。
+6. **有問題時回復**：先停止服務並保存發布後新增的資料。若尚未產生新三欄資料，可在確認相容後恢復舊 release 與設定，再啟動及驗證；本次切換過程的自動回復已實際成功。若已產生三欄辨識或人工確認，不能直接切回 `20260928-branding-v2`，因為舊版分享流程假設有完整 19 欄。此時優先保留支援兩種欄位的新程式，將 `PROMPT_VERSION` 改回 `nameplate_v001`，讓後續辨識恢復舊範圍；既有三欄與 19 欄資料仍依各自快照讀取。若程式本身必須退版，需先驗證相容修補或另行規劃資料回復；從備份恢復前務必另存發布後的新資料，不以開發機快照覆寫，也不能只換程式便宣稱回復完成。
 
-日常啟停命令見上節。`current` 更新後，DSM 開機指令仍使用同一固定路徑，無須每次改成具體 release 名稱。完成正式切換前，三欄候選版只在本機測試，NAS 維持 `20260928-branding-v2`。
+日常啟停命令見上節。`current` 更新後，DSM 開機指令仍使用同一固定路徑，無須每次改成具體 release 名稱。後續版本仍先在 Mac 驗證，經使用者接受後再更新 NAS。
 
 NIM 的 token 與免費存取規則見 [用量說明](nim-usage.md)。

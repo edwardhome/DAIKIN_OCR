@@ -2,6 +2,8 @@
 
 本文件記錄軟體驗證，不代表現場辨識準確率。
 
+以下依工作階段保留歷史狀態；目前版本請見末段「手機驗收後部署 NAS 三欄版本」。
+
 ## 已實測
 
 - macOS arm64、Python 3.12.13、uv 0.11.20；依賴已寫入 uv.lock。
@@ -70,7 +72,18 @@ uv run python scripts/live_smoke.py --profile nvidia
 - 真實照片、推論圖與裁切皆僅在專案外的系統暫存目錄處理，完成後已清除；沒有加入專案、GitHub、正式工作或 Ground Truth Dataset。保留的測試結果 JSON 也位於專案外。
 - NAS 仍為 `20260928-branding-v2`，這次修正與實照實驗未部署 NAS；Mac 正式背景服務持續停止。
 
-## 待現場驗收
+## 2026-09-28 手機驗收後部署 NAS 三欄版本
+
+- 使用者完成 Mac 手機測試並同意發布；台中 NAS 已切至 `20260928-identity-e4a62f9`，程式 commit `e4a62f91a773bc4bd74e3dea36819bda6067d40a`。版本來自 Git archive，不含金鑰、Mac 資料庫、測試照片或本機 Python 環境。
+- 使用 NAS 的獨立 Python 3.12 環境與既有鎖定依賴；Pillow 12.3.0、pillow-heif 1.8.0 匯入成功。本次沒有資料庫 migration。預設維持 NIM `z-ai/glm-5.3-flash`，Prompt 改為 `nameplate_identity_v002`，未設定低思考量。
+- 停止服務後以 SQLite backup API 保存一致性資料庫，連同原圖、處理圖、資料集及設定備份至 `/volume1/homes/edward61221/nameplate/backups/20260928-identity-e4a62f9-retry1/`。沒有把 Mac 新資料覆蓋到 NAS。
+- 所有既有資料列均核對不變：12 筆工作、14 次辨識、9 版人工確認、171 筆欄位標註、13 筆模型觀測。SQLite 完整性通過；透過登入後 API 核對 12 張原圖 SHA-256、9 版既有分享文字，以及所有舊 Attempt 的 19 欄範圍。
+- 新服務 `/api/bootstrap` 的一般辨識範圍確為室外機型號、室內機型號、序號，歷史欄位目錄仍有 19 欄。從 Mac 經外部 DDNS 驗證健康檢查、登入頁、品牌文字，5 個前端檔案雜湊均符合已驗收程式；SSH 中斷後 Web／Worker 仍運作。
+- 使用 NAS 既有的一張已人工確認照片，在專案外暫存資料庫執行新三欄流程，實際 NIM 回應成功。模型耗時 79.67 秒，含前處理 80.02 秒；輸入 2,592、輸出 524、總計 3,116 tokens。僅驗證新環境的推論、三欄範圍、耗時與用量紀錄，沒有建立正式工作或新 Ground Truth，也不代表平均速度或準確率。暫存照片與資料庫完成後移除。
+- 首次切換因管理行程殘留舊 Prompt 環境變數而未通過三欄檢查，已自動恢復舊服務；清除繼承設定後再次切換並完成上述檢查。已有三欄資料後的回復必須考量舊分享程式不相容，見 [部署與回復流程](nas-deployment.md)。
+- Mac 測試服務維持開啟。NAS 的 DSM 開機任務由使用者設定，本次未重開 NAS，實際重開機恢復仍待驗證。
+
+## 待持續現場驗證
 
 真實照片的準確率／人工處理時間、iPhone Safari 與 Android Chrome 原生拍照／分享、LINE 公司官方帳號收件流程、NVIDIA NIM 的現場照片表現與持續使用穩定性、NAS 重開機恢復。
 
