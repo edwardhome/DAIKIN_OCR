@@ -1,4 +1,4 @@
-<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>進入銘牌辨識工具</title><link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}"></head>
-<body><main class="login"><p class="eyebrow">現場工作工具</p><h1>大金空調銘牌辨識</h1><p>輸入存取碼以使用工具。</p>
+<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>進入銘牌辨識工具｜陳憲隆自製</title><link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}"></head>
+<body><main class="login"><p class="eyebrow">陳憲隆自製</p><h1>大金空調銘牌辨識</h1><p>輸入存取碼以使用工具。</p>
 <form method="post"><input type="hidden" name="csrf_token" value="{{ session.csrf }}"><label for="password">存取碼</label><input id="password" name="password" type="password" autocomplete="current-password" maxlength="200" required autofocus>
 {% if error %}<p role="alert" class="error">{{ error }}</p>{% endif %}<button type="submit">進入工具</button></form></main></body></html>
