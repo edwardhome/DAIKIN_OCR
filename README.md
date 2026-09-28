@@ -8,7 +8,9 @@ Python 3.12+、uv、Flask、SQLite、HTML/CSS/Vanilla JavaScript。預設 HTTP *
 
 完整使用流程、狀態機、資料飛輪、模型評估及 M6 容量／價格參考，請見 [操作手冊](操作手冊.md)。
 
-2026-09-28 版本狀態：NAS 目前使用已驗收的三欄版本 `20260928-identity-e4a62f9`。新辨識使用 `nameplate_identity_v002`，只擷取**室外機型號、室內機型號、序號**；歷史 19 欄與人工版本保留。Mac 背景服務依使用者要求關閉；本地開發版另加入兩行 LINE 分享與 Gemini Provider，尚未更新 NAS。[NAS 入口](http://home-taichung.myds.me:50003/)・[部署與回復流程](docs/nas-deployment.md)
+2026-09-28 版本狀態：NAS 已更新為 `20260928-gemini-2099f39`，兩行 LINE 分享與 Gemini Provider 已上線。NAS 與 Mac 的預設模型均設為 Gemini `gemini-flash-latest`；NIM 仍可手動選用。新辨識使用 `nameplate_identity_v002`，只擷取**室外機型號、室內機型號、序號**；歷史 19 欄與人工版本保留。Mac 背景服務依使用者要求保持關閉。[NAS 入口](http://home-taichung.myds.me:50003/)・[部署與回復流程](docs/nas-deployment.md)
+
+此次新金鑰在 Mac／NAS 均通過模型資訊查詢；NAS 實照推論的三次發布前檢查皆收到 Gemini HTTP 503 高需求回覆，尚未完成新金鑰的成功實照驗證。供應商忙碌時可稍後重試或手動選 NIM；系統不會自動切換模型。詳見 [驗證紀錄](docs/verification.md)。
 
 ## 快速啟動
 
@@ -19,14 +21,16 @@ uv sync --frozen
 cp .env.example .env
 ```
 
-編輯 `.env`，預設使用 NVIDIA NIM。填入自己的 `NVIDIA_API_KEY` 與支援圖片的 `NVIDIA_MODEL`，例如目前驗證過的 `z-ai/glm-5.3-flash`；Key 不可提交至 Git。
+編輯 `.env`，範例設定預設使用 Google AI Studio／Gemini。填入自己的 `GEMINI_API_KEY`，模型設定為 `gemini-flash-latest`；Key 不可提交至 Git。
 
 ```dotenv
-VISION_PROVIDER=nvidia
-NVIDIA_MODEL=z-ai/glm-5.3-flash
+VISION_PROVIDER=gemini
+GEMINI_MODEL=gemini-flash-latest
 PROMPT_VERSION=nameplate_identity_v002
 APP_PORT=50003
 ```
+
+若改用 NVIDIA NIM，填入 `NVIDIA_API_KEY`、`NVIDIA_MODEL`，並設定 `VISION_PROVIDER=nvidia`；目前驗證過的模型包含 `z-ai/glm-5.3-flash`。兩種雲端金鑰分開保存，切換預設不會刪除另一個供應商的設定。
 
 若改用本地 Ollama，另設定 `VISION_PROVIDER=ollama`。例如安裝 Qwen3-VL 8B instruct，再填入實際模型標籤：
 
@@ -75,7 +79,7 @@ TRUSTED_HOSTS=localhost,127.0.0.1,你的Mac內網IP,你的DDNS完整網域
 
 確認與分享操作位於結果頁最上方。辨識中維持固定載入畫面，只更新狀態，完成後才切換結果。
 
-本地新版的分享／複製文字僅有人工確認的室外機型號與序號兩行，沒有標題、欄位名稱、室內機或頁尾；照片分享保留。例如：
+分享／複製文字僅有人工確認的室外機型號與序號兩行，沒有標題、欄位名稱、室內機或頁尾；照片分享保留。例如：
 
 ```text
 RHF30RVLT
@@ -112,7 +116,7 @@ NAS 原生背景服務與搬遷方式見 [NAS 部署](docs/nas-deployment.md)。
 
 若以 NVIDIA 為一般辨識預設，設定 `VISION_PROVIDER=nvidia`。金鑰僅存 `.env`。缺少金鑰時無法實際驗證雲端推論；自動化測試使用模擬 HTTP 回覆。
 
-Google AI Studio 的 Gemini 使用原生 `generateContent` 介面。於伺服器 `.env` 設定以下項目，再於首頁模型選單選 `gemini`，即可沿用上傳、人工確認、耗時、token 與 Benchmark 流程。NIM 預設不變；若要改預設再設定 `VISION_PROVIDER=gemini`。
+Google AI Studio 的 Gemini 使用原生 `generateContent` 介面。於伺服器 `.env` 設定以下項目，並以 `VISION_PROVIDER=gemini` 選為預設，即可沿用上傳、人工確認、耗時、token 與 Benchmark 流程。NIM 仍可從首頁模型選單選用。
 
 ```dotenv
 GEMINI_API_KEY=填入自己的金鑰
@@ -120,6 +124,8 @@ GEMINI_MODEL=gemini-flash-latest
 GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta
 GEMINI_MAX_IMAGE_BYTES=10000000
 ```
+
+部署預設由 `.env` 決定；程式在沒有 `VISION_PROVIDER` 設定時的相容性 fallback 仍為 `nvidia`。切換後需重啟 Web 與 Worker，並以首頁預選模型及 `/api/bootstrap` 確認生效。
 
 金鑰只透過 `X-goog-api-key` header 送至供應商，不進 URL、設定快照、前端或 Git。推論圖以 inlineData 傳送，使用 JSON Schema 約束輸出；不另上傳至 Files API。模型名稱可設定，實際回傳的 `modelVersion` 另存，方便追蹤 `latest` 別名的版本差異。Gemini 輸出 token 含可取得的思考 token；總數優先使用 API 回報，缺資料顯示「未提供」。429 顯示流量限制，不宣稱免費額度已用完；拒答、截斷與不完整回覆均保留可取得的觀測並要求人工處理。[Google 官方 API 與用量欄位](https://ai.google.dev/api/generate-content)
 
@@ -157,6 +163,6 @@ node --test tests/frontend/*.test.cjs
 
 ## 第一批驗收資料
 
-尚未收到真實現場照片，因此沒有建立虛構 Ground Truth。請將正常、斜拍、遠距離、小字、髒污、龜裂、R22、R32 照片，以首頁「用途：Benchmark 樣本」上傳並人工標註；這些來源及其評測工作不納入現場工作 Dashboard。
+已使用指定資料夾的真實現場照片進行隔離測試；照片未加入專案或 Git，模型輸出也未自動當成 Ground Truth。正式驗收仍需將正常、斜拍、遠距離、小字、髒污、龜裂、R22、R32 照片，以首頁「用途：Benchmark 樣本」上傳並人工標註；這些來源及其評測工作不納入現場工作 Dashboard。
 
-真實部署另需所選視覺模型、NVIDIA 憑證（要比較雲端時）、實際 DDNS 與手機實機測試。未實作第二階段的 OCR、透視校正、自動裁切、Jev、模型路由、微調、LINE Login 或 Messaging API。
+真實部署另需所選視覺模型、對應雲端憑證、實際 DDNS 與手機實機測試。未實作第二階段的 OCR、透視校正、自動裁切、Jev、模型路由、微調、LINE Login 或 Messaging API。
