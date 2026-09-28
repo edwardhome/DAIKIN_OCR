@@ -16,8 +16,26 @@
 - 合成圖未印出的欄位保持 null。該次沒有建立 Human Ground Truth，沒有納入現場資料庫或固定 Benchmark。
 - 合成圖與原始回覆留在 data/verification/0e689659-f33a-4191-9489-14258bb310f9（Git 排除）。
 
+## 2026-09-28 NVIDIA NIM 真實連線測試
+
+- 使用 `.env` 的 `nvidia` profile，模型 `z-ai/glm-5.3-flash`，同步 Chat Completions、`prompt` 輸出模式及原設定的 4096 token 上限。模型的圖文輸入與端點格式已對照 [NVIDIA 模型文件](https://build.nvidia.com/z-ai/glm-5-3-flash/modelcard) 與 [API 文件](https://docs.api.nvidia.com/nim/reference/z-ai-glm-5-3-flash-infer)。
+- 實際送出一張 1200×920 合成英文銘牌，HTTP 200，經 Upload → Worker → 前處理 → NIM → Normalize → Rule Validation，最終為 `SUCCEEDED`。
+- 本次模型呼叫 74.87 秒，完整處理 74.92 秒；單次結果不能代表平均延遲或現場準確率。
+- 六核心欄位 6/6 相符；全部 12 個有印出的欄位值與單位相符，其他 7 個欄位保持 null。
+- 原始回覆為有效 JSON，不需語法修復，`finish_reason=stop`，沒有輸出截斷。API 回報輸入 2575、輸出 973、合計 3548 tokens；未提供固定模型版本識別。
+- 序號 `E015283` 正確保留；規則提示易混字元，未自動修改序號。沒有建立人工 Ground Truth，也未寫入正式工作或資料集。
+- Provider／Schema 相關 24 項測試及修改後測試腳本的 Ruff 檢查通過；API 金鑰沒有寫入驗證 JSON。
+- 測試圖、原始回覆、結果及逐欄檢查摘要保存在 `data/verification/c0994d1a-56a3-4232-b56e-fbc0a3764259/`，Git 排除。
+- 確認沒有排隊或辨識中的工作後，重啟 Web／Worker 載入新設定。Port 50003 健康檢查、登入及模型設定讀取通過，`nvidia` 顯示已設定 `z-ai/glm-5.3-flash`；預設仍為 `.env` 原有的 Ollama。
+
+需要重新測試時執行下列命令。此命令會依指定 profile 真正呼叫模型服務，使用隔離的暫存資料庫；預設 profile 仍為 Ollama。
+
+```sh
+uv run python scripts/live_smoke.py --profile nvidia
+```
+
 ## 待現場驗收
 
-真實照片的準確率／人工處理時間、iPhone Safari 與 Android Chrome 原生拍照／分享、LINE 公司官方帳號收件流程、NVIDIA NIM 真實憑證與所選模型、實際 DDNS 外部連線。
+真實照片的準確率／人工處理時間、iPhone Safari 與 Android Chrome 原生拍照／分享、LINE 公司官方帳號收件流程、NVIDIA NIM 的現場照片表現與持續使用穩定性、實際 DDNS 外部連線。
 
 README 中的自動測試可隨時重跑；測試 fixtures 與 browser fixture 均為合成資料。

@@ -1,5 +1,6 @@
-"""Opt-in live Ollama check using a synthetic card, isolated from all production data."""
+"""Opt-in live provider check using a synthetic card, isolated from production data."""
 
+import argparse
 import io
 import json
 from pathlib import Path
@@ -15,6 +16,9 @@ from app.workers import worker
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--profile", default="ollama", help="Configured provider profile ID")
+    args = parser.parse_args()
     output = ROOT / "data" / "verification" / uid()
     output.mkdir(parents=True)
     image = Image.new("RGB", (1200, 920), "#f9faf8")
@@ -59,7 +63,7 @@ def main():
             headers=headers,
             data={
                 "scope": "BENCHMARK_SOURCE",
-                "profile_id": "ollama",
+                "profile_id": args.profile,
                 "image": (
                     io.BytesIO((output / "synthetic-nameplate.jpg").read_bytes()),
                     "synthetic.jpg",
@@ -83,6 +87,7 @@ def main():
         print(
             json.dumps(
                 {
+                    "profile_id": args.profile,
                     "status": attempt["status"],
                     "error_code": attempt["error_code"],
                     "model": attempt["model"],
