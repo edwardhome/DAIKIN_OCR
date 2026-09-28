@@ -1,8 +1,11 @@
+from functools import lru_cache
 from typing import Generic, Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict, create_model
 
 SCHEMA_VERSION = "nameplate_v001"
+IDENTITY_SCHEMA_VERSION = "nameplate_identity_v002"
+IDENTITY_FIELDS = ("outdoor_model", "indoor_model", "serial_number")
 CONFIDENCES = ("HIGH", "MEDIUM", "LOW", "UNKNOWN")
 CORRECTION_TYPES = (
     "OCR_ERROR",
@@ -64,12 +67,47 @@ Fields = create_model(
 )
 
 
-def json_schema():
-    return Fields.model_json_schema()
+def prompt_field_names(prompt_version):
+    return IDENTITY_FIELDS if prompt_version == IDENTITY_SCHEMA_VERSION else tuple(FIELD_SPECS)
 
 
-def field_metadata():
+def snapshot_field_names(snapshot):
+    """Read the scope saved when an attempt was created, never the current setting."""
+    names = snapshot.get("field_names")
+    if names is None:
+        names = (snapshot.get("schema") or {}).get("properties")
+    if names is None:
+        names = prompt_field_names(snapshot.get("schema_version", SCHEMA_VERSION))
+    if not names or not set(names).issubset(FIELD_SPECS):
+        raise ValueError("Invalid recognition field scope")
+    # Stable, known ordering also handles old schema dictionaries saved with sorted keys.
+    return tuple(name for name in FIELD_SPECS if name in names)
+
+
+def schema_version_for(field_names):
+    return IDENTITY_SCHEMA_VERSION if set(field_names) == set(IDENTITY_FIELDS) else SCHEMA_VERSION
+
+
+@lru_cache(maxsize=8)
+def fields_model(field_names):
+    if field_names == tuple(FIELD_SPECS):
+        return Fields
+    return create_model(
+        "NameplateIdentityFields",
+        __config__=ConfigDict(extra="forbid"),
+        **{name: (Field[FIELD_SPECS[name][1]], ...) for name in field_names},
+    )
+
+
+def json_schema(field_names=None):
+    return fields_model(
+        tuple(FIELD_SPECS if field_names is None else field_names)
+    ).model_json_schema()
+
+
+def field_metadata(field_names=None):
     return [
         {"name": k, "label": label, "type": kind.__name__, "unit": unit, "core": k in CORE_FIELDS}
         for k, (label, kind, unit) in FIELD_SPECS.items()
+        if field_names is None or k in field_names
     ]

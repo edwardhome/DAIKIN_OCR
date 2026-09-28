@@ -7,6 +7,7 @@ from app.errors import ProviderError
 from app.providers import InferenceImage
 from app.providers.nvidia import NvidiaNimVisionProvider
 from app.providers.ollama import OllamaVisionProvider
+from app.providers.usage import normalize_token_usage
 from app.schemas import json_schema
 
 
@@ -21,7 +22,15 @@ def test_ollama_sends_image_and_schema_and_captures_digest():
         assert body["format"]["type"] == "object"
         assert body["messages"][0]["images"] == ["aW1hZ2U="]
         assert body["stream"] is False
-        return httpx.Response(200, json={"model": "vision-example", "message": {"content": "{}"}})
+        return httpx.Response(
+            200,
+            json={
+                "model": "vision-example",
+                "message": {"content": "{}"},
+                "prompt_eval_count": 321,
+                "eval_count": 45,
+            },
+        )
 
     provider = OllamaVisionProvider(
         {"model": "vision-example", "base_url": "http://ollama"},
@@ -34,6 +43,11 @@ def test_ollama_sends_image_and_schema_and_captures_digest():
     )
     assert response.model_version == "sha-example"
     assert response.output_text == "{}"
+    assert normalize_token_usage("ollama", response.raw_result) == {
+        "input_tokens": 321,
+        "output_tokens": 45,
+        "total_tokens": 366,
+    }
 
 
 @pytest.mark.parametrize("mode", ["prompt", "json_object", "json_schema"])
@@ -46,7 +60,13 @@ def test_nvidia_wire_format(mode):
             "data:image/jpeg;base64,"
         )
         assert ("response_format" in body) == (mode != "prompt")
-        return httpx.Response(200, json={"choices": [{"message": {"content": "{}"}}]})
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": "{}"}}],
+                "usage": {"prompt_tokens": 100, "completion_tokens": 20, "total_tokens": 120},
+            },
+        )
 
     provider = NvidiaNimVisionProvider(
         {"model": "vision-cloud", "base_url": "https://nvidia/v1", "output_mode": mode},
@@ -55,18 +75,20 @@ def test_nvidia_wire_format(mode):
         api_key="testing-only-key",
         transport=httpx.MockTransport(handler),
     )
-    assert (
-        provider.recognize(
-            image=InferenceImage(b"image"), schema={}, instruction="extract"
-        ).output_text
-        == "{}"
-    )
+    response = provider.recognize(image=InferenceImage(b"image"), schema={}, instruction="extract")
+    assert response.output_text == "{}"
+    assert normalize_token_usage("nvidia", response.raw_result) == {
+        "input_tokens": 100,
+        "output_tokens": 20,
+        "total_tokens": 120,
+    }
 
 
 @pytest.mark.parametrize(
     "status,code",
     [
         (401, "PROVIDER_AUTH_FAILED"),
+        (402, "PROVIDER_QUOTA_EXHAUSTED"),
         (429, "PROVIDER_RATE_LIMITED"),
         (500, "PROVIDER_API_ERROR"),
         (202, "PROVIDER_ASYNC_UNSUPPORTED"),
@@ -85,6 +107,34 @@ def test_provider_errors_are_sanitized(status, code):
         provider.recognize(image=InferenceImage(b"image"), schema={}, instruction="extract")
     assert err.value.code == code
     assert "secret" not in str(err.value)
+
+
+@pytest.mark.parametrize(
+    "body,code",
+    [
+        ({"error": {"code": "insufficient_quota"}}, "PROVIDER_QUOTA_EXHAUSTED"),
+        ({"error": {"type": "insufficient_credits"}}, "PROVIDER_QUOTA_EXHAUSTED"),
+        ({"error": {"code": "credits_exhausted"}}, "PROVIDER_QUOTA_EXHAUSTED"),
+        ({"error": {"code": "rate_limit_exceeded"}}, "PROVIDER_RATE_LIMITED"),
+        ({"error": {"message": "quota exceeded; token rate limit"}}, "PROVIDER_RATE_LIMITED"),
+        ({"error": {"code": ["insufficient_quota"]}}, "PROVIDER_RATE_LIMITED"),
+        ({"error": "insufficient_quota"}, "PROVIDER_RATE_LIMITED"),
+    ],
+)
+def test_nvidia_distinguishes_quota_from_rate_limits(body, code):
+    provider = NvidiaNimVisionProvider(
+        {"model": "vision", "base_url": "https://nvidia/v1"},
+        timeout=1,
+        max_tokens=1,
+        api_key="testing-only-key",
+        transport=httpx.MockTransport(lambda r: httpx.Response(429, json=body)),
+    )
+    with pytest.raises(ProviderError) as err:
+        provider.recognize(image=InferenceImage(b"image"), schema={}, instruction="extract")
+    assert err.value.code == code
+    assert err.value.retryable is (code == "PROVIDER_RATE_LIMITED")
+    assert "testing-only-key" not in str(err.value)
+    assert "insufficient_quota" not in str(err.value)
 
 
 @pytest.mark.parametrize(

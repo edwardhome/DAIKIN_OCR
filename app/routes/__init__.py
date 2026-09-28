@@ -20,7 +20,7 @@ from sqlalchemy import select
 
 from app.errors import AppError
 from app.models import Attempt, Benchmark, BenchmarkItem, Confirmation, DatasetVersion, Job, db, now
-from app.schemas import CORRECTION_TYPES, FIELD_SPECS, field_metadata
+from app.schemas import CORRECTION_TYPES, FIELD_SPECS, field_metadata, prompt_field_names
 from app.services import benchmark, datasets
 from app.services.confirmations import confirm, share_text
 from app.services.dashboard import dashboard
@@ -109,6 +109,7 @@ def bootstrap():
     return {
         "csrf_token": session["csrf"],
         "fields": field_metadata(),
+        "recognition_fields": field_metadata(prompt_field_names(cfg["PROMPT_VERSION"])),
         "correction_types": CORRECTION_TYPES,
         "default_profile": cfg["DEFAULT_PROFILE"],
         "debug_data": cfg["DEBUG_DATA"],

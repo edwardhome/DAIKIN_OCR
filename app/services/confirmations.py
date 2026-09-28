@@ -2,7 +2,13 @@ from sqlalchemy import update
 
 from app.errors import AppError
 from app.models import Attempt, Confirmation, FieldAnnotation, Job, db
-from app.schemas import ANNOTATION_STATUSES, CORRECTION_TYPES, FIELD_SPECS, SCHEMA_VERSION
+from app.schemas import (
+    ANNOTATION_STATUSES,
+    CORRECTION_TYPES,
+    FIELD_SPECS,
+    schema_version_for,
+    snapshot_field_names,
+)
 from app.services.jobs import latest_confirmation, require
 from app.services.normalize import normalize_value
 from app.validators import validate
@@ -13,8 +19,11 @@ def confirm(job, payload):
     if attempt.job_id != job.id:
         raise AppError("ATTEMPT_MISMATCH", "辨識結果不屬於這張照片。", 422)
     source = payload.get("fields")
-    if not isinstance(source, dict) or set(source) != set(FIELD_SPECS):
-        raise AppError("INCOMPLETE_CONFIRMATION", "請提交完整的 19 個欄位。", 422)
+    names = snapshot_field_names(attempt.snapshot)
+    if not isinstance(source, dict) or set(source) != set(names):
+        raise AppError(
+            "INCOMPLETE_CONFIRMATION", f"請提交本次辨識的完整 {len(names)} 個欄位。", 422
+        )
     expected = payload.get("expected_revision")
     if isinstance(expected, bool) or not isinstance(expected, int) or expected != job.revision:
         raise AppError("REVISION_CONFLICT", "此資料已有新版本，請重新整理後確認。", 409)
@@ -26,7 +35,7 @@ def confirm(job, payload):
     previous = latest_confirmation(job.id)
     fields, annotations = {}, []
     ai = (attempt.normalized_ai_result or {}).get("fields", {})
-    for name, (_, kind, canonical_unit) in FIELD_SPECS.items():
+    for name in names:
         field = source[name]
         if not isinstance(field, dict):
             raise AppError("INVALID_FIELD", "確認欄位格式無效。", 422)
@@ -49,7 +58,7 @@ def confirm(job, payload):
         changed = predicted.get("value") != value or predicted.get("unit") != unit
         before = (
             previous.human_ground_truth["fields"][name]["value"]
-            if previous
+            if previous and name in previous.human_ground_truth["fields"]
             else predicted.get("value")
         )
         fields[name] = {"value": value, "unit": unit, "annotation_status": status}
@@ -69,7 +78,7 @@ def confirm(job, payload):
                 note=note,
             )
         )
-    result = {"schema_version": SCHEMA_VERSION, "fields": fields}
+    result = {"schema_version": schema_version_for(names), "fields": fields}
     problems = validate(result)
     changed_rows = db.session.execute(
         update(Job).where(Job.id == job.id, Job.revision == expected).values(revision=expected + 1)
@@ -118,9 +127,12 @@ def share_text(confirmation):
         "refrigerant",
         "refrigerant_charge",
     ):
-        lines.append(f"{FIELD_SPECS[name][0]}：{display(name)}")
-    lines.append(f"電源：{display('power_voltage')} / {display('power_frequency')}")
+        if name in fields:
+            lines.append(f"{FIELD_SPECS[name][0]}：{display(name)}")
+    if "power_voltage" in fields and "power_frequency" in fields:
+        lines.append(f"電源：{display('power_voltage')} / {display('power_frequency')}")
     for name in ("cooling_capacity", "heating_capacity", "manufacture_year"):
-        lines.append(f"{FIELD_SPECS[name][0]}：{display(name)}")
+        if name in fields:
+            lines.append(f"{FIELD_SPECS[name][0]}：{display(name)}")
     lines.append("資料由空調銘牌辨識系統產生")
     return "\n".join(lines)

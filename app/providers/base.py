@@ -6,6 +6,22 @@ import httpx
 from app.errors import ProviderError
 
 
+def _explicit_quota_error(response):
+    """Only structured quota codes distinguish a quota failure from ordinary 429s."""
+    try:
+        body = response.json()
+    except ValueError:
+        return False
+    error = body.get("error") if isinstance(body, dict) else None
+    if not isinstance(error, dict):
+        return False
+    quota_codes = {"insufficient_quota", "insufficient_credits", "credits_exhausted"}
+    return any(
+        isinstance(error.get(key), str) and error[key].strip().lower() in quota_codes
+        for key in ("code", "type")
+    )
+
+
 class HttpProvider:
     def __init__(self, profile, *, timeout, max_tokens, api_key="", transport=None):
         self.profile, self.timeout, self.max_tokens = profile, timeout, max_tokens
@@ -26,6 +42,14 @@ class HttpProvider:
             if response.status_code in {401, 403}:
                 raise ProviderError(
                     "PROVIDER_AUTH_FAILED", "模型服務驗證失敗，請檢查伺服器設定。", False
+                )
+            if response.status_code == 402 or (
+                response.status_code == 429 and _explicit_quota_error(response)
+            ):
+                raise ProviderError(
+                    "PROVIDER_QUOTA_EXHAUSTED",
+                    "模型服務額度不足，請檢查服務額度，或改用其他模型／依照片人工確認。",
+                    False,
                 )
             if response.status_code == 429:
                 raise ProviderError("PROVIDER_RATE_LIMITED", "模型服務忙碌，請稍後重新辨識。")

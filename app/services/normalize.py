@@ -3,7 +3,7 @@ import math
 import re
 
 from app.errors import AppError
-from app.schemas import CONFIDENCES, FIELD_SPECS, SCHEMA_VERSION, Fields
+from app.schemas import CONFIDENCES, FIELD_SPECS, fields_model, schema_version_for
 
 NORMALIZER_VERSION = "normalize_v001"
 
@@ -93,12 +93,13 @@ def normalize_value(name, value, supplied_unit=None):
     return round(float(value) * conversion[1], 9), expected_unit, warnings
 
 
-def normalize(payload):
+def normalize(payload, field_names=None):
+    field_names = tuple(FIELD_SPECS if field_names is None else field_names)
     source = payload.get("fields", payload)
-    if not isinstance(source, dict) or not set(source).intersection(FIELD_SPECS):
+    if not isinstance(source, dict) or not set(source).intersection(field_names):
         raise AppError("AI_PARSE_FAILED", "回覆未包含銘牌欄位，請重新辨識。", 502, True)
     fields, warnings = {}, []
-    for name in FIELD_SPECS:
+    for name in field_names:
         raw = source.get(name)
         if name not in source:
             warnings.append(issue(name, "MISSING_FIELD", "模型未回傳此欄位。"))
@@ -120,5 +121,5 @@ def normalize(payload):
             "confidence": confidence,
             "raw_text": evidence,
         }
-    Fields.model_validate(fields)
-    return {"schema_version": SCHEMA_VERSION, "fields": fields}, warnings
+    fields_model(field_names).model_validate(fields)
+    return {"schema_version": schema_version_for(field_names), "fields": fields}, warnings

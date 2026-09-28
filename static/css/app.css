@@ -149,8 +149,7 @@ small {
   align-items: start;
 }
 .photo-column {
-  position: sticky;
-  top: 15px;
+  min-width: 0;
   margin-top: 0;
 }
 .photo-column summary {
@@ -161,6 +160,113 @@ small {
 }
 .review-fields {
   min-width: 0;
+}
+.review-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+.photo-transcript {
+  margin-bottom: 18px;
+  padding: 16px;
+  border-radius: 8px;
+  background: #f3f7f6;
+}
+.photo-transcript .help {
+  margin-bottom: 12px;
+}
+.transcript-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
+}
+button.transcript-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px 8px;
+  text-align: left;
+  color: var(--ink);
+  background: white;
+  border-color: #adc1c4;
+  padding: 12px 14px;
+  min-width: 0;
+}
+.transcript-field:hover {
+  border-color: var(--brand);
+  background: #edf6f5;
+}
+.transcript-field.is-edited {
+  border-color: #bc8b41;
+  background: #fffaf0;
+}
+.transcript-label {
+  font-size: 13px;
+  color: var(--muted);
+}
+.transcript-value {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  font-size: 20px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+.transcript-field .badge {
+  grid-column: 2;
+  grid-row: 1;
+  font-size: 11px;
+  align-self: start;
+}
+.transcript-source {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.preview-unsaved {
+  font-weight: 600;
+}
+.field {
+  scroll-margin-block: 24px;
+}
+.field.field-highlight {
+  outline: 3px solid #27989f;
+  outline-offset: 3px;
+  box-shadow: 0 0 0 6px #d6efeb;
+}
+.recognition-timing {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 14px 0 8px;
+}
+.recognition-timing > div {
+  border-left: 3px solid #bad0d1;
+  padding-left: 10px;
+}
+.recognition-timing dt {
+  font-size: 12px;
+  color: var(--muted);
+}
+.recognition-timing dd {
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  margin: 0;
+}
+.recognition-tokens {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.quota-warning {
+  border-color: #cd7479;
+  background: #fff7f6;
+}
+.quota-warning h2 {
+  color: var(--bad);
+}
+.loading-elapsed {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
 }
 .recognition-loading {
   max-width: 760px;
@@ -471,7 +577,32 @@ hr {
     grid-row: 1;
   }
   .photo {
-    max-height: 42vh;
+    max-height: 55vh;
+  }
+  .photo-transcript {
+    padding: 12px;
+  }
+  .transcript-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  button.transcript-field {
+    padding: 10px;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .transcript-field .badge {
+    grid-column: 1;
+    grid-row: 3;
+    justify-self: start;
+  }
+  .transcript-value {
+    font-size: 18px;
+  }
+  .recognition-timing {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .recognition-tokens {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
   .grid {
     grid-template-columns: 1fr;

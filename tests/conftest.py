@@ -59,6 +59,8 @@ def app(tmp_path):
             "TRUSTED_HOSTS": ["localhost"],
             "PROVIDER_FACTORY": lambda *a, **kw: FakeProvider(),
             "DEBUG_DATA": False,
+            "DEFAULT_PROFILE": "ollama",
+            "PROMPT_VERSION": "nameplate_v001",
             "PROFILES": {
                 "ollama": {
                     "id": "ollama",
@@ -111,6 +113,8 @@ def confirmation_payload(job, **values):
     attempt = job["attempts"][-1]
     fields = {}
     for name, spec in FIELD_SPECS.items():
+        if name not in attempt.get("field_names", FIELD_SPECS):
+            continue
         field = (attempt.get("normalized_ai_result") or {"fields": {}})["fields"].get(name, {})
         value = values.get(name, field.get("value"))
         fields[name] = {

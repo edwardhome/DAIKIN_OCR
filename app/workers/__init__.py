@@ -10,6 +10,7 @@ from app.errors import AppError
 from app.image import ImagePreprocessor
 from app.models import Attempt, Job, Observation, db, now, uid
 from app.providers import InferenceImage, make_provider
+from app.schemas import snapshot_field_names
 from app.services.normalize import normalize, parse_output
 from app.validators import validate
 
@@ -112,7 +113,7 @@ def run_attempt(app, identifier, worker_id):
                     "MODEL_REFUSAL", "模型未接受這次辨識，請重新拍攝或改用其他模型。", 502, True
                 )
             payload, repaired = parse_output(response.output_text)
-            normalized, warnings = normalize(payload)
+            normalized, warnings = normalize(payload, snapshot_field_names(snapshot))
             warnings.extend(validate(normalized))
             a.normalized_ai_result, a.validation_result, a.repair_result = (
                 normalized,
@@ -157,6 +158,7 @@ def run_attempt(app, identifier, worker_id):
                     (field["value"], field["unit"])
                     != (old["fields"][name]["value"], old["fields"][name]["unit"])
                     for name, field in normalized["fields"].items()
+                    if name in old["fields"]
                 ):
                     disagreed.append(previous.id)
                     previous.hard_reasons = sorted(

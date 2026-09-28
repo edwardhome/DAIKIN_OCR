@@ -7,7 +7,14 @@ from app.config import ROOT
 from app.errors import AppError
 from app.image import digest, inspect_image
 from app.models import Attempt, Confirmation, FieldAnnotation, Job, Observation, db, uid
-from app.schemas import SCHEMA_VERSION, json_schema
+from app.providers.usage import aggregate_token_usage, normalize_token_usage
+from app.schemas import (
+    field_metadata,
+    json_schema,
+    prompt_field_names,
+    schema_version_for,
+    snapshot_field_names,
+)
 from app.services.normalize import NORMALIZER_VERSION
 from app.validators import VALIDATOR_VERSION
 
@@ -36,13 +43,15 @@ def config_snapshot(profile_id=None):
     if not path.is_file():
         raise AppError("PROMPT_NOT_FOUND", "找不到指定 Prompt 版本。", 422)
     instruction = path.read_text()
+    names = prompt_field_names(version)
     return {
         "profile": dict(profile),
         "prompt_version": version,
         "instruction": instruction,
         "prompt_sha256": digest(instruction.encode()),
-        "schema_version": SCHEMA_VERSION,
-        "schema": json_schema(),
+        "schema_version": schema_version_for(names),
+        "field_names": list(names),
+        "schema": json_schema(names),
         "preprocessor": dict(cfg["PREPROCESSOR"]),
         "normalizer_version": NORMALIZER_VERSION,
         "validator_version": VALIDATOR_VERSION,
@@ -170,6 +179,9 @@ def confirmation_dict(c):
 
 
 def attempt_dict(a, debug=False):
+    observations = db.session.scalars(
+        select(Observation).where(Observation.attempt_id == a.id).order_by(Observation.created_at)
+    ).all()
     result = {
         key: getattr(a, key)
         for key in (
@@ -194,7 +206,14 @@ def attempt_dict(a, debug=False):
             "finished_at",
         )
     }
+    result["token_usage"] = aggregate_token_usage(
+        [normalize_token_usage(o.provider, o.raw_result) for o in observations]
+    )
     result["prompt_version"] = a.snapshot["prompt_version"]
+    names = snapshot_field_names(a.snapshot)
+    result["field_names"] = list(names)
+    result["schema_version"] = schema_version_for(names)
+    result["field_metadata"] = field_metadata(names)
     result["processed_image_url"] = f"/api/attempts/{a.id}/image" if a.processed_path else None
     if debug:
         result["snapshot"] = a.snapshot
@@ -207,7 +226,7 @@ def attempt_dict(a, debug=False):
                 "raw_result": o.raw_result,
                 "output_text": o.output_text,
             }
-            for o in db.session.scalars(select(Observation).where(Observation.attempt_id == a.id))
+            for o in observations
         ]
     return result
 

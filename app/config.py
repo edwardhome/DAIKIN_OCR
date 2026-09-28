@@ -30,8 +30,8 @@ def settings(overrides=None):
         "SESSION_COOKIE_SAMESITE": "Lax",
         "SESSION_COOKIE_SECURE": False,
         "DEBUG_DATA": env.get("DEBUG_DATA", "false").lower() == "true",
-        "DEFAULT_PROFILE": env.get("VISION_PROVIDER", "ollama"),
-        "PROMPT_VERSION": env.get("PROMPT_VERSION", "nameplate_v001"),
+        "DEFAULT_PROFILE": env.get("VISION_PROVIDER", "nvidia"),
+        "PROMPT_VERSION": env.get("PROMPT_VERSION", "nameplate_identity_v002"),
         "PREPROCESSOR": {
             "version": "image_v001",
             "max_edge": int(env.get("IMAGE_MAX_EDGE", "2560")),

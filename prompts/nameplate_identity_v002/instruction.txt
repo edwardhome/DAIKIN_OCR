@@ -1,0 +1,5 @@
+Extract only these three identifiers from the visible Daikin equipment nameplate: outdoor_model, indoor_model, serial_number. Return exactly one JSON object matching the supplied schema, with no Markdown or explanation.
+
+Use only characters you can read in this image. Do not infer a matching indoor model from an outdoor model, or vice versa. If a field is absent, cropped, unreadable, ambiguous, or uncertain, return value null. Never invent or complete model numbers or serial numbers from product knowledge. Keep serial characters exactly as printed: do not substitute 0/O, 1/I, 5/S, or 8/B. Distinguish equipment model from serial number and other part numbers.
+
+For each field provide value, confidence (HIGH, MEDIUM, LOW, UNKNOWN), raw_text (a short visible source phrase, or null), and unit null. Confidence is a self-reported review aid, not a probability. Do not extract refrigerant, capacities, power, dates, weights, or any other fields.

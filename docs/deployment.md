@@ -1,5 +1,7 @@
 # macOS 部署：HTTP / 50003
 
+台中 NAS 的原生背景服務、資料搬遷與 DSM 開機排程，請見 [NAS 部署文件](nas-deployment.md)。目前 `.env.example` 預設 NVIDIA NIM，使用本地 Ollama 時需明確設定 `VISION_PROVIDER=ollama`。
+
 ## 啟動與網路
 
 先依 README 安裝依賴、填 `.env`、初始化資料庫。`scripts/start.sh` 啟動一個 Web 與一個 Worker，Ctrl+C 結束兩者。也能分別執行 `uv run nameplate serve`、`uv run nameplate worker`。每次修改 `.env` 或 profiles 後重新啟動。

@@ -1,10 +1,14 @@
-# 大金空調銘牌 AI 辨識系統
+# 陳憲隆自製 大金空調銘牌辨識
+
+AI 智慧影像辨識
 
 手機拍照 → 模型辨識 → 人工確認／修正 → 分享至 LINE。每次確認另存為一版標註，AI 原值、原始回覆、人工答案與差異分開保存。
 
 Python 3.12+、uv、Flask、SQLite、HTML/CSS/Vanilla JavaScript。預設 HTTP **50003**。無 React、無 LINE Messaging API、無自動微調。
 
 完整使用流程、狀態機、資料飛輪、模型評估及 M6 容量／價格參考，請見 [操作手冊](操作手冊.md)。
+
+2026-09-28 版本狀態：本工作目錄是待使用者本機驗收的三欄候選版，新的辨識使用 `nameplate_identity_v002`，只擷取**室外機型號、室內機型號、序號**；既有 `nameplate_v001` 的 19 欄結果、人工版本與原 Prompt 保留。NAS 目前使用 `20260928-branding-v2`，只更新系統名稱，尚未部署三欄版本。Mac 原正式背景服務已停止；本機測試完成並獲接受後才更新 NAS。[部署與回復流程](docs/nas-deployment.md)
 
 ## 快速啟動
 
@@ -15,7 +19,16 @@ uv sync --frozen
 cp .env.example .env
 ```
 
-編輯 `.env`，填入已安裝的視覺模型。例如可先安裝規格要求的 Qwen3-VL 8B instruct 版本，再填入實際標籤：
+編輯 `.env`，預設使用 NVIDIA NIM。填入自己的 `NVIDIA_API_KEY` 與支援圖片的 `NVIDIA_MODEL`，例如目前驗證過的 `z-ai/glm-5.3-flash`；Key 不可提交至 Git。
+
+```dotenv
+VISION_PROVIDER=nvidia
+NVIDIA_MODEL=z-ai/glm-5.3-flash
+PROMPT_VERSION=nameplate_identity_v002
+APP_PORT=50003
+```
+
+若改用本地 Ollama，另設定 `VISION_PROVIDER=ollama`。例如安裝 Qwen3-VL 8B instruct，再填入實際模型標籤：
 
 ```sh
 ollama pull qwen3-vl:8b-instruct
@@ -23,6 +36,7 @@ ollama pull qwen3-vl:8b-instruct
 
 ```dotenv
 OLLAMA_MODEL=qwen3-vl:8b-instruct
+VISION_PROVIDER=ollama
 APP_PORT=50003
 ```
 
@@ -67,11 +81,15 @@ TRUSTED_HOSTS=localhost,127.0.0.1,你的Mac內網IP,你的DDNS完整網域
 
 詳細部署、停機與備份請見 [docs/deployment.md](docs/deployment.md)。
 
+NAS 原生背景服務與搬遷方式見 [NAS 部署](docs/nas-deployment.md)。辨識結果會顯示耗時與本次輸入／輸出／總 token 用量，照片預設展開；照片上方文字可點選跳到人工修改欄位。免費規則與額度／限流差異見 [NIM 用量說明](docs/nim-usage.md)。
+
+目前維持單一模型辨識與 `MODEL_MAX_TOKENS=4096`。三欄縮減及後續思考量、圖片裁切實驗見 [辨識速度改善](docs/recognition-speed.md)；未驗證的加速選項不會自動套用到 NAS。
+
 ## 使用流程
 
 1. 首頁選擇模型，拍攝或選擇 JPEG、PNG、HEIC，最多 20 MB。
 2. 可標記照片難度與設備群組。同設備多張照片使用相同群組，避免調整集與驗收集洩漏。
-3. 等待辨識，核對原圖與全部欄位。LOW 與規則警告會醒目提示。
+3. 等待辨識，核對原圖與本次欄位：新三欄辨識核對兩個型號與序號；舊 19 欄紀錄仍顯示原欄位。LOW 與規則警告會醒目提示。
 4. 有值欄位標記已核實。空白需區分未標示、無法辨讀與尚未核對。
 5. 修正原因可選指定分類，不確定保留 UNKNOWN；不會推測根因。
 6. 按「確認資料並儲存」建立不可覆寫的標註版本。再修改會新增版本。
@@ -90,15 +108,15 @@ TRUSTED_HOSTS=localhost,127.0.0.1,你的Mac內網IP,你的DDNS完整網域
 ## HITL 與 Benchmark
 
 - 四層資料：原圖／處理圖、Machine Observation、Machine Decision、Human Ground Truth。
-- 每次確認保存 19 筆欄位標註，含原 AI 值、人工輸入、標準化人工值、前版值、信心、警告、修正原因與備註。
+- 每次確認依該次辨識的欄位範圍保存標註：新版本 3 欄、歷史版本 19 欄，含原 AI 值、人工輸入、標準化人工值、前版值、信心、警告、修正原因與備註。
 - OCR、Decision Model、Cascade 第一版未啟用；OCR 原始結果為 null，數字門檻不作用於 LLM 自評枚舉。
 - 私有 ZIP 匯出包含原圖、處理圖、原始模型回覆、設定快照、人工答案、修正差異與確認歷程。
 - `confirmed`：全部欄位已核實、成功辨識且未修改；`corrected`：人工有改；`low_confidence`、`failed` 可包含尚未標註資料，Ground Truth 為 null。
 - `benchmark`：人工確認且至少一個核心欄位可評分；每個固定版本有 manifest 與雜湊，後續修改不影響舊答案。
 - 每次匯出最多取 100 張照片，相同原圖去重；同照片或設備群組不能跨 DEVELOPMENT／HOLDOUT。
-- 只對 DEVELOPMENT 中 19 欄皆已核實的樣本產生 `training_ready.jsonl`；沒有執行訓練或對外上傳。
+- 只對 DEVELOPMENT 中該樣本全部欄位皆可評分的資料產生 `training_ready.jsonl`：新樣本 3 欄、歷史樣本 19 欄。匯出保存欄位範圍；沒有執行訓練或對外上傳。
 
-從「資料集」建立 Benchmark 版本，再至 Benchmark 選擇同圖多模型比較。報表提供逐欄正確率、六核心欄位全對率、難度分層、失敗率、空值率、基準差異率、耗時與人工審查後的幻覺率。前後比較必須同一固定資料集，任何核心欄位退步都獨立列出。小樣本不會判定通過。
+從「資料集」建立 Benchmark 版本，再至 Benchmark 選擇同圖多模型比較。報表提供逐欄正確率、評分範圍內的核心欄位全對率、難度分層、失敗率、空值率、基準差異率、耗時與人工審查後的幻覺率。新版本核心為 3 欄，歷史完整範圍為 6 個核心欄位；前後比較必須使用同一固定資料集，並在共同辨識及標註欄位上重新計分，列出排除欄位。任何共同核心欄位退步都獨立列出。小樣本不會判定通過。
 
 95% 是待實際現場資料驗證的目標，不是目前已達成的成績。詳見 [評分定義](docs/benchmark.md) 與 [架構／資料鏈](docs/architecture.md)。
 

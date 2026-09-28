@@ -7,6 +7,8 @@ let config,
 let jobView = 0;
 let stopRecognition = () => {};
 let disposeShare = () => {};
+let disposeReview = () => {};
+let markPreviewUnsaved = () => {};
 const componentLoads = new Map();
 
 function loadComponent(name) {
@@ -184,6 +186,7 @@ function profileSelect() {
 }
 function trackDirty() {
   dirty = true;
+  markPreviewUnsaved();
   document.querySelector("#share-panel")?.setAttribute("hidden", "");
   const hint = document.querySelector("#confirmation-hint");
   if (hint) hint.textContent = "內容已修改，請再次確認並儲存後分享。";
@@ -205,6 +208,7 @@ window.addEventListener("beforeunload", (e) => {
 window.addEventListener("pagehide", () => {
   jobView += 1;
   stopRecognition();
+  disposeReview();
 });
 window.addEventListener("pageshow", (e) => {
   if (e.persisted && !dirty && location.pathname.startsWith("/jobs/"))
@@ -218,13 +222,17 @@ function home() {
   add(
     box,
     el("p", "拍照 → AI 辨識 → 人工確認 → 分享", "eyebrow"),
-    el("h1", "大金空調銘牌辨識"),
+    el("h1", "陳憲隆自製 大金空調銘牌辨識"),
+    el("p", "AI 智慧影像辨識", "help"),
     el(
       "p",
       "盡量讓銘牌文字清楚入鏡。辨識後可對照照片，修改每個欄位。",
       "muted",
     ),
   );
+  if (config.recognition_fields?.length) {
+    box.append(el("p", `辨識項目：${config.recognition_fields.map((f) => f.label).join("、")}`, "help"));
+  }
   const profile = profileSelect();
   box.append(labeled("辨識模型", profile));
   if (config.profiles.every((p) => !p.configured))
@@ -523,6 +531,20 @@ function recognitionLoading(job, attempt, view) {
   const stage = el("p", "", "loading-stage");
   stage.setAttribute("role", "status");
   stage.setAttribute("aria-live", "polite");
+  const elapsed = el("p", "", "loading-elapsed");
+  // Do not announce a ticking counter to screen readers every second.
+  elapsed.setAttribute("aria-live", "off");
+  let stopPolling = () => {};
+  const stopElapsed = window.NameplateReview.startElapsed({
+    since: attempt.created_at,
+    onTick: (seconds) => {
+      elapsed.textContent = `已等待約 ${seconds} 秒（含排隊）`;
+    },
+  });
+  stopRecognition = () => {
+    stopElapsed();
+    stopPolling();
+  };
   const messages = {
     QUEUED: "照片已保存，正在等待開始辨識。",
     PREPROCESSING: "正在處理照片，準備讀取銘牌。",
@@ -538,6 +560,7 @@ function recognitionLoading(job, attempt, view) {
     spinner,
     el("h2", "辨識中"),
     stage,
+    elapsed,
     el(
       "p",
       "照片已保存。完成後會自動顯示結果，也可以稍後從辨識紀錄開啟。",
@@ -554,7 +577,7 @@ function recognitionLoading(job, attempt, view) {
         if (!found) throw new Error("暫時無法取得這次辨識，正在重新連線…");
         return found;
       };
-      stopRecognition = window.NameplatePolling.watch({
+      stopPolling = window.NameplatePolling.watch({
         load: (signal) => api(`/api/jobs/${job.id}`, { signal }),
         isPending: (data) =>
           ["QUEUED", "PREPROCESSING", "RUNNING"].includes(current(data).status),
@@ -584,13 +607,20 @@ async function jobPage(id, selectedId, receivedJob) {
   const view = ++jobView;
   stopRecognition();
   disposeShare();
+  disposeReview();
   disposeShare = () => {};
-  const job = receivedJob || (await api(`/api/jobs/${id}`));
+  disposeReview = () => {};
+  markPreviewUnsaved = () => {};
+  const [job] = await Promise.all([
+    receivedJob || api(`/api/jobs/${id}`),
+    loadComponent("review"),
+  ]);
   if (view !== jobView) return;
   root.replaceChildren(el("h1", "銘牌辨識結果"));
   const attempt =
     job.attempts.find((a) => a.id === selectedId) || job.attempts.at(-1);
   if (!attempt) return;
+  const reviewSpecs = window.NameplateReview.fieldSpecs(attempt, config.fields);
   const top = panel();
   top.classList.add("recognition-meta");
   const stateBadge = el("span", labels[attempt.status], "badge");
@@ -623,11 +653,25 @@ async function jobPage(id, selectedId, receivedJob) {
     recognitionLoading(job, attempt, view);
     return;
   }
-  const split = el("div", null, "split"),
+  const timing = el("dl", null, "recognition-timing");
+  for (const [label, value] of window.NameplateReview.timingRows(attempt)) {
+    timing.append(add(el("div"), el("dt", label), el("dd", value)));
+  }
+  add(
+    top,
+    timing,
+    el("p", "辨識處理包含照片處理與 AI 回應；本次總耗時另計入排隊，不含人工校正。", "help"),
+  );
+  const tokens = el("dl", null, "recognition-timing recognition-tokens");
+  for (const [label, value] of window.NameplateReview.tokenRows(attempt.token_usage)) {
+    tokens.append(add(el("div"), el("dt", label), el("dd", value)));
+  }
+  add(top, tokens, el("p", "Token 為這次請求的用量；未提供表示服務未回報，不代表 0，也不是帳戶剩餘額度。", "help"));
+  const split = el("div", null, "review-layout"),
     photo = el("details", null, "panel photo-column"),
     form = el("div");
-  photo.open = window.matchMedia("(min-width: 721px)").matches;
-  photo.append(el("summary", "查看照片，對照辨識內容"));
+  photo.open = true;
+  photo.append(el("summary", "照片與辨識文字（點此收合或展開）"));
   form.className = "review-fields";
   form.append(el("h2", "確認辨識內容"));
   const img = el("img", null, "photo");
@@ -666,16 +710,18 @@ async function jobPage(id, selectedId, receivedJob) {
     }),
   );
   photo.append(labeled("照片難度（人工標記）", difficulty));
-  add(split, form, photo);
+  add(split, photo, form);
   root.append(split);
   if (attempt.status === "FAILED") {
-    const failure = panel("辨識失敗");
+    const presentation = window.NameplateReview.failurePresentation(attempt);
+    const failure = panel(presentation.title);
+    if (presentation.quota) failure.classList.add("quota-warning");
     add(
       failure,
       el("p", attempt.error_message, "error"),
-      el("p", "可重新辨識、重新拍照，或直接依照片填寫後確認。", "help"),
+      el("p", presentation.help, "help"),
     );
-    form.append(failure);
+    root.insertBefore(failure, split);
   } else
     form.append(
       el(
@@ -691,10 +737,24 @@ async function jobPage(id, selectedId, receivedJob) {
     stateBadge.textContent = `已人工確認 · 第 ${confirmed.revision_no} 版`;
   const fields = attempt.normalized_ai_result?.fields || {};
   const controls = {};
+  const cards = {};
+  const fieldNavigator = window.NameplateReview.createFieldNavigator({
+    controls,
+    cards,
+    reducedMotion: window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+  });
+  disposeReview = () => fieldNavigator.dispose();
+  const preview = window.NameplateReview.createPreview({
+    specs: reviewSpecs,
+    fields,
+    onActivate: fieldNavigator.activate,
+  });
+  photo.insertBefore(preview.element, img);
+  markPreviewUnsaved = () => preview.markUnsaved();
   const grid = el("div", null, "grid");
   reviewMs = 0;
   activeSince = performance.now();
-  for (const spec of config.fields) {
+  for (const spec of reviewSpecs) {
     const ai = fields[spec.name] || {
       value: null,
       confidence: "UNKNOWN",
@@ -705,7 +765,9 @@ async function jobPage(id, selectedId, receivedJob) {
       (a) => a.field_name === spec.name,
     );
     const card = el("div", null, `field ${ai.confidence.toLowerCase()}`);
-    const value = input("text", human?.value ?? ai.value ?? "");
+    card.id = `field-card-${spec.name}`;
+    const initialValue = window.NameplateReview.initialValue(ai, human);
+    const value = input("text", initialValue);
     value.id = `field-${spec.name}`;
     value.maxLength = 200;
     if (spec.type !== "str") value.inputMode = "decimal";
@@ -758,12 +820,18 @@ async function jobPage(id, selectedId, receivedJob) {
       .forEach((w) => card.append(el("p", w.message, "warning")));
     value.addEventListener("input", () => {
       status.value = value.value.trim() ? "KNOWN" : "UNREVIEWED";
+      preview.update(spec.name, value.value, {
+        edited: value.value !== String(initialValue),
+        confirmed: Boolean(confirmed),
+      });
       trackDirty();
     });
     [status, reason, note].forEach((n) =>
       n.addEventListener("change", trackDirty),
     );
     controls[spec.name] = { value, status, reason, note };
+    cards[spec.name] = card;
+    preview.update(spec.name, value.value, { confirmed: Boolean(confirmed) });
     grid.append(card);
   }
   form.append(grid);
@@ -785,7 +853,7 @@ async function jobPage(id, selectedId, receivedJob) {
       try {
         accrue();
         const values = {};
-        for (const spec of config.fields) {
+        for (const spec of reviewSpecs) {
           const c = controls[spec.name];
           values[spec.name] = {
             value: c.value.value.trim() || null,
@@ -1101,7 +1169,7 @@ async function renderBenchmark(id, experiments) {
       [
         "模型",
         "核心逐欄正確率",
-        "六欄全對率",
+        "核心欄位全對率",
         "空值率",
         "人工審查幻覺率",
         "平均延遲",
@@ -1130,9 +1198,10 @@ async function renderBenchmark(id, experiments) {
     add(
       d,
       el("summary", `${target} · 逐欄與難度結果`),
+      el("p", `核心欄位：${(r.core_fields || []).map((name) => config.fields.find((f) => f.name === name)?.label || name).join("、") || "依此版本設定"}`, "help"),
       table(
         ["欄位", "已知值正確率", "正確留空率", "基準差異率"],
-        config.fields.map((f) => [
+        config.fields.filter((f) => r.per_field[f.name]).map((f) => [
           f.label,
           rate(r.per_field[f.name].accuracy),
           rate(r.per_field[f.name].absence_accuracy),
@@ -1202,6 +1271,9 @@ async function renderBenchmark(id, experiments) {
             ),
             el("p", "樣本不足時不判定通過；報告不會自動更換部署模型。", "help"),
           );
+          if (result.scope_changed) {
+            out.append(el("p", "兩版辨識範圍不同，以上只比較共同欄位，不直接比較原始總分。", "warning"));
+          }
           compareBox.append(out);
         }),
         "secondary",
@@ -1222,7 +1294,9 @@ async function renderBenchmark(id, experiments) {
       jsonDetails("固定人工答案", item.ground_truth),
     );
     if (item.status === "SUCCEEDED") {
-      const field = select(config.fields.map((f) => [f.name, f.label]));
+      const field = select(config.fields
+        .filter((f) => Object.hasOwn(item.ai_result?.fields || {}, f.name))
+        .map((f) => [f.name, f.label]));
       const judgment = select([
         ["UNREVIEWED", "尚未審查"],
         ["SUPPORTED", "有影像依據"],

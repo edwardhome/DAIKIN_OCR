@@ -10,7 +10,7 @@ from sqlalchemy import or_, select
 from app.errors import AppError
 from app.image import digest
 from app.models import Attempt, Confirmation, DatasetItem, DatasetVersion, Job, db, now, uid
-from app.schemas import CORE_FIELDS
+from app.schemas import CORE_FIELDS, snapshot_field_names
 from app.services.jobs import audit_payload, confirmation_dict, latest_confirmation
 
 CATEGORIES = {"confirmed", "corrected", "low_confidence", "failed", "benchmark"}
@@ -95,6 +95,10 @@ def candidate(job, category):
         "model": attempt.model,
         "model_version": attempt.model_version,
         "pipeline_config": attempt.snapshot,
+        "field_names": list(snapshot_field_names(attempt.snapshot)),
+        "schema_version": (truth or attempt.normalized_ai_result or attempt.snapshot).get(
+            "schema_version"
+        ),
         "latency_ms": attempt.latency_ms,
         "normalized_ai_result": attempt.normalized_ai_result,
         "validation_result": attempt.validation_result,
@@ -206,7 +210,13 @@ def export_dataset(payload):
                 training.append(
                     {
                         "image": sample["original_image"],
-                        "instruction": "Extract structured equipment nameplate information. Use null for absent fields.",
+                        "instruction": (
+                            "Extract only these equipment nameplate fields: "
+                            + ", ".join(truth["fields"])
+                            + ". Use null for absent fields."
+                        ),
+                        "schema_version": truth["schema_version"],
+                        "field_names": list(truth["fields"]),
                         "ground_truth_json": {
                             name: {"value": field["value"], "unit": field["unit"]}
                             for name, field in truth["fields"].items()
@@ -223,8 +233,9 @@ def export_dataset(payload):
             "created_at": now(),
             "sample_count": len(samples),
             "training_ready_count": len(training),
+            "field_scopes": sorted({tuple(s["field_names"]) for s in samples}),
             "samples_sha256": digest(records),
-            "export_version": "export_v001",
+            "export_version": "export_v002",
             "notice": "Private local export. No external sharing or training permission is granted.",
         }
         manifest_data = json_bytes(manifest)
