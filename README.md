@@ -8,9 +8,11 @@ Python 3.12+、uv、Flask、SQLite、HTML/CSS/Vanilla JavaScript。預設 HTTP *
 
 完整使用流程、狀態機、資料飛輪、模型評估及 M6 容量／價格參考，請見 [操作手冊](操作手冊.md)。
 
-2026-09-28 版本狀態：NAS 已更新為 `20260928-gemini-2099f39`，兩行 LINE 分享與 Gemini Provider 已上線。NAS 與 Mac 的預設模型均設為 Gemini `gemini-flash-latest`；NIM 仍可手動選用。新辨識使用 `nameplate_identity_v002`，只擷取**室外機型號、室內機型號、序號**；歷史 19 欄與人工版本保留。Mac 背景服務依使用者要求保持關閉。[NAS 入口](http://home-taichung.myds.me:50003/)・[部署與回復流程](docs/nas-deployment.md)
+2026-09-28 版本狀態：NAS 已更新為 `20260928-gemini-busy-ac563ef`，加入高需求提示與更換模型操作，兩行 LINE 分享及 Gemini Provider 沿用。NAS 與 Mac 的預設模型均設為 Gemini `gemini-flash-latest`；NIM 仍可手動選用。新辨識使用 `nameplate_identity_v002`，只擷取**室外機型號、室內機型號、序號**；歷史 19 欄與人工版本保留。Mac 背景服務依使用者要求保持關閉。[NAS 入口](http://home-taichung.myds.me:50003/)・[部署與回復流程](docs/nas-deployment.md)
 
-此次新金鑰在 Mac／NAS 均通過模型資訊查詢；NAS 實照推論的三次發布前檢查皆收到 Gemini HTTP 503 高需求回覆，尚未完成新金鑰的成功實照驗證。供應商忙碌時可稍後重試或手動選 NIM；系統不會自動切換模型。詳見 [驗證紀錄](docs/verification.md)。
+前次 Gemini 發布時，新金鑰在 Mac／NAS 均通過模型資訊查詢；NAS 實照推論的三次檢查皆收到 Gemini HTTP 503 高需求回覆，尚未完成新金鑰的成功實照驗證。本次提示更新使用隔離模擬回覆測試，沒有追加實際模型呼叫。供應商忙碌時可稍後重試或手動選 NIM；系統不會自動切換模型。詳見 [驗證紀錄](docs/verification.md)。
+
+供應商明確回報需求過高時，結果頁顯示「需求量過高，請更換模型」。按「更換模型」會跳到重新辨識的模型選單，選擇其他已設定模型後再送出。較早僅保存 HTTP 503 的紀錄顯示「模型服務暫時無法使用，請更換模型」，不推測原因；失敗紀錄與原圖保留，用量未知時不填入零。
 
 ## 快速啟動
 
