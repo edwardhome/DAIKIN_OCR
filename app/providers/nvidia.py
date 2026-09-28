@@ -9,6 +9,14 @@ from .base import HttpProvider
 
 class NvidiaNimVisionProvider(HttpProvider):
     def recognize(self, *, image, schema, instruction):
+        reasoning_effort = self.profile.get("reasoning_effort", "")
+        if not isinstance(reasoning_effort, str) or reasoning_effort not in {
+            "",
+            "low",
+            "high",
+            "max",
+        }:
+            raise ProviderError("PROVIDER_CONFIG_INVALID", "NVIDIA 推理強度設定無效。", False)
         if not self.api_key:
             raise ProviderError("PROVIDER_NOT_CONFIGURED", "尚未設定 NVIDIA API Key。", False)
         if len(image.data) > self.profile.get("max_image_bytes", 5000000):
@@ -41,6 +49,8 @@ class NvidiaNimVisionProvider(HttpProvider):
                 }
             ],
         }
+        if reasoning_effort:
+            payload["reasoning_effort"] = reasoning_effort
         mode = self.profile.get("output_mode", "prompt")
         if mode == "json_schema":
             payload["response_format"] = {

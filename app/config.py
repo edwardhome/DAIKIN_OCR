@@ -33,7 +33,7 @@ def settings(overrides=None):
         "DEFAULT_PROFILE": env.get("VISION_PROVIDER", "nvidia"),
         "PROMPT_VERSION": env.get("PROMPT_VERSION", "nameplate_identity_v002"),
         "PREPROCESSOR": {
-            "version": "image_v001",
+            "version": "image_v002",
             "max_edge": int(env.get("IMAGE_MAX_EDGE", "2560")),
             "contrast": float(env.get("IMAGE_CONTRAST", "1")),
             "sharpness": float(env.get("IMAGE_SHARPNESS", "1")),
@@ -64,6 +64,7 @@ def settings(overrides=None):
             "model_version": env.get("NVIDIA_MODEL_VERSION") or None,
             "base_url": env.get("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1"),
             "output_mode": env.get("NVIDIA_OUTPUT_MODE", "prompt"),
+            "reasoning_effort": env.get("NVIDIA_REASONING_EFFORT", ""),
             "max_image_bytes": int(env.get("NVIDIA_MAX_IMAGE_BYTES", "5000000")),
         },
     }
@@ -77,7 +78,15 @@ def settings(overrides=None):
                 {
                     k: v
                     for k, v in item.items()
-                    if k in {"id", "provider", "model", "model_version", "output_mode"}
+                    if k
+                    in {
+                        "id",
+                        "provider",
+                        "model",
+                        "model_version",
+                        "output_mode",
+                        "reasoning_effort",
+                    }
                 }
             )
             profiles[item["id"]] = base

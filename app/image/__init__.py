@@ -11,6 +11,9 @@ from app.errors import AppError
 register_heif_opener()
 FORMATS = {
     "JPEG": ("jpg", "image/jpeg"),
+    # Phones may embed additional images in a JPEG/MPF container. Its primary
+    # frame is a normal JPEG; preserve the complete original, infer on frame 0.
+    "MPO": ("jpg", "image/jpeg"),
     "PNG": ("png", "image/png"),
     "HEIF": ("heic", "image/heic"),
 }
@@ -28,6 +31,7 @@ def inspect_image(data, max_pixels):
                 fmt = im.format
                 if fmt not in FORMATS:
                     raise AppError("UNSUPPORTED_FORMAT", "請上傳 JPEG、PNG 或 HEIC 圖片。", 415)
+                im.seek(0)
                 if im.width * im.height > max_pixels:
                     raise AppError("IMAGE_TOO_LARGE", "圖片像素超過限制。", 413)
                 im.load()
@@ -46,6 +50,7 @@ class ImagePreprocessor:
         data = original.read_bytes()
         inspect_image(data, max_pixels)
         with Image.open(io.BytesIO(data)) as source:
+            source.seek(0)
             image = ImageOps.exif_transpose(source).convert("RGB")
             edge = config["max_edge"]
             if not 256 <= edge <= 8192:

@@ -56,6 +56,7 @@ def test_nvidia_wire_format(mode):
         assert request.headers["authorization"] == "Bearer testing-only-key"
         assert request.url.path == "/v1/chat/completions"
         body = json.loads(request.content)
+        assert "reasoning_effort" not in body
         assert body["messages"][0]["content"][1]["image_url"]["url"].startswith(
             "data:image/jpeg;base64,"
         )
@@ -82,6 +83,53 @@ def test_nvidia_wire_format(mode):
         "output_tokens": 20,
         "total_tokens": 120,
     }
+
+
+@pytest.mark.parametrize("effort", ["", "low", "high", "max"])
+def test_nvidia_optional_reasoning_effort_is_sent_only_when_configured(effort):
+    def handler(request):
+        payload = json.loads(request.content)
+        if effort:
+            assert payload["reasoning_effort"] == effort
+        else:
+            assert "reasoning_effort" not in payload
+        return httpx.Response(200, json={"choices": [{"message": {"content": "{}"}}]})
+
+    provider = NvidiaNimVisionProvider(
+        {
+            "model": "configurable-model",
+            "base_url": "https://nvidia/v1",
+            "reasoning_effort": effort,
+        },
+        timeout=1,
+        max_tokens=100,
+        api_key="testing-only-key",
+        transport=httpx.MockTransport(handler),
+    )
+    result = provider.recognize(image=InferenceImage(b"image"), schema={}, instruction="extract")
+    assert result.output_text == "{}"
+
+
+@pytest.mark.parametrize("effort", [None, True, 1, [], "medium", "LOW"])
+def test_nvidia_invalid_reasoning_effort_rejected_before_request(effort):
+    def handler(request):
+        pytest.fail("Invalid reasoning effort must not make a network request")
+
+    provider = NvidiaNimVisionProvider(
+        {
+            "model": "configurable-model",
+            "base_url": "https://nvidia/v1",
+            "reasoning_effort": effort,
+        },
+        timeout=1,
+        max_tokens=100,
+        api_key="testing-only-key",
+        transport=httpx.MockTransport(handler),
+    )
+    with pytest.raises(ProviderError) as error:
+        provider.recognize(image=InferenceImage(b"image"), schema={}, instruction="extract")
+    assert error.value.code == "PROVIDER_CONFIG_INVALID"
+    assert error.value.retryable is False
 
 
 @pytest.mark.parametrize(
